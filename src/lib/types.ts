@@ -123,6 +123,15 @@ export interface ReportDetail extends ExpenseReport {
   approvalHistory: ApprovalHistory[];
 }
 
+/** A report enriched with the names and workflow step for routing/approval views. */
+export interface ReportRoutingRow {
+  report: ExpenseReport;
+  submitterName: string;
+  approverName: string;
+  /** Human-readable workflow position, e.g. "1 of 1". */
+  step: string;
+}
+
 export interface ReportFilter {
   status?: ReportStatus;
   submitterId?: string;

@@ -115,6 +115,18 @@ export function patchReport(
   return report;
 }
 
+/** Delete a report and cascade to its line items and approval history. */
+export function removeReport(id: string): boolean {
+  const data = getDb();
+  const exists = data.reports.some((r) => r.id === id);
+  if (!exists) return false;
+  data.reports = data.reports.filter((r) => r.id !== id);
+  data.lineItems = data.lineItems.filter((li) => li.reportId !== id);
+  data.approvalHistory = data.approvalHistory.filter((h) => h.reportId !== id);
+  persist();
+  return true;
+}
+
 /** Recompute and store a report's total from its line items. */
 export function recalcReportTotal(reportId: string): number {
   const total = round2(

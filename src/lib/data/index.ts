@@ -24,6 +24,7 @@ import {
   patchReceipt,
   patchReport,
   recalcReportTotal,
+  removeReport,
 } from "@/lib/data/store";
 import { APP_NAME } from "@/lib/constants";
 import type {
@@ -38,6 +39,8 @@ import type {
   ReceiptFilter,
   ReportDetail,
   ReportFilter,
+  ReportRoutingRow,
+  ReportStatus,
   User,
 } from "@/lib/types";
 
@@ -54,6 +57,67 @@ function userById(id: string | undefined): User | undefined {
 
 const currency = (amount: number) =>
   amount.toLocaleString("en-US", { style: "currency", currency: "USD" });
+
+function userName(id: string | undefined): string {
+  return userById(id)?.name ?? "—";
+}
+
+/** The approver currently/most-recently associated with a report. */
+function currentApproverId(report: ExpenseReport): string | undefined {
+  const history = listApprovalHistory(report.id);
+  const decision = [...history]
+    .reverse()
+    .find((h) => h.action === "APPROVED" || h.action === "REJECTED");
+  if (decision) return decision.approverId;
+  const pending = [...history].reverse().find((h) => h.action === "PENDING");
+  if (pending) return pending.approverId;
+  return userById(report.submitterId)?.managerId ?? undefined;
+}
+
+/** The approver a report is currently waiting on (only meaningful while open). */
+function pendingApproverId(report: ExpenseReport): string | undefined {
+  const pending = [...listApprovalHistory(report.id)]
+    .reverse()
+    .find((h) => h.action === "PENDING");
+  return pending?.approverId;
+}
+
+/** Human-readable workflow step, e.g. "1 of 1". */
+function stepLabel(report: ExpenseReport): string {
+  const history = listApprovalHistory(report.id);
+  const total = Math.max(1, new Set(history.map((h) => h.approverId)).size);
+  const decisions = history.filter(
+    (h) => h.action === "APPROVED" || h.action === "REJECTED"
+  ).length;
+  const open = report.status === "SUBMITTED" || report.status === "IN_REVIEW";
+  const current = open ? Math.min(decisions + 1, total) : total;
+  return `${current} of ${total}`;
+}
+
+function involvesUser(report: ExpenseReport, userId: string): boolean {
+  return (
+    report.submitterId === userId ||
+    report.onBehalfOfId === userId ||
+    report.paidToId === userId
+  );
+}
+
+function toRoutingRow(report: ExpenseReport): ReportRoutingRow {
+  return {
+    report,
+    submitterName: userName(report.submitterId),
+    approverName: userName(currentApproverId(report)),
+    step: stepLabel(report),
+  };
+}
+
+const OPEN_STATUSES: ReportStatus[] = ["SUBMITTED", "IN_REVIEW"];
+const ACTIVE_STATUSES: ReportStatus[] = [
+  "SUBMITTED",
+  "IN_REVIEW",
+  "APPROVED",
+  "REJECTED",
+];
 
 /** Queue a mock email into the outbox. */
 function sendMockEmail(to: string, subject: string, body: string): MockEmail {
@@ -148,6 +212,12 @@ export async function updateReport(
   const updated = patchReport(id, patch);
   if (!updated) throw new Error(`Report ${id} not found`);
   return updated;
+}
+
+export async function deleteReport(id: string): Promise<void> {
+  await delay();
+  const ok = removeReport(id);
+  if (!ok) throw new Error(`Report ${id} not found`);
 }
 
 export async function submitReport(id: string): Promise<ExpenseReport> {
@@ -263,6 +333,45 @@ export async function markPaid(id: string): Promise<ExpenseReport> {
     );
   }
   return updated;
+}
+
+// ---- Dashboard / personal views ----
+
+/** Reports the user owns (as submitter, on-behalf subject, or payee). */
+export async function getMyReports(userId: string): Promise<ExpenseReport[]> {
+  await delay();
+  return listReports()
+    .filter((r) => involvesUser(r, userId))
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+}
+
+/** Open reports currently awaiting the given approver, enriched for display. */
+export async function getApprovalQueue(
+  approverId: string
+): Promise<ReportRoutingRow[]> {
+  await delay();
+  return listReports()
+    .filter(
+      (r) =>
+        OPEN_STATUSES.includes(r.status) && pendingApproverId(r) === approverId
+    )
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+    .map(toRoutingRow);
+}
+
+/** Active (non-DRAFT, non-PAID) reports the user is involved in, for routing. */
+export async function getRoutingForUser(
+  userId: string
+): Promise<ReportRoutingRow[]> {
+  await delay();
+  return listReports()
+    .filter(
+      (r) =>
+        ACTIVE_STATUSES.includes(r.status) &&
+        (involvesUser(r, userId) || currentApproverId(r) === userId)
+    )
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+    .map(toRoutingRow);
 }
 
 // ---- Receipts ----
