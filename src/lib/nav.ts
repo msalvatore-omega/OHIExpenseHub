@@ -27,7 +27,7 @@ export const NAV_ITEMS: NavItem[] = [
   { label: "New Expense", href: "/reports/new", icon: FilePlus2 },
   { label: "My Expenses", href: "/my-expenses", icon: ReceiptText },
   { label: "Approvals", href: "/approvals", icon: ClipboardCheck },
-  { label: "Receipt Gallery", href: "/receipts", icon: Images },
+  { label: "Receipt Gallery", href: "/gallery", icon: Images },
   {
     label: "Accounting",
     href: "/accounting",

@@ -152,6 +152,17 @@ export interface CreateDraftInput {
   periodTo: string;
 }
 
+/** Input for persisting a newly captured receipt. */
+export interface CreateReceiptInput {
+  userId: string;
+  imageUrl: string;
+  merchantName?: string;
+  merchantDate?: string;
+  totalAmount?: number;
+  taxAmount?: number;
+  rawOcrData?: unknown;
+}
+
 /** A line item as submitted from the editor (ids optional for new rows). */
 export interface LineItemInput {
   id?: string;

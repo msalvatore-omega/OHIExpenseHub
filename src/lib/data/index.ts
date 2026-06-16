@@ -10,6 +10,7 @@ import {
   findReport,
   insertApprovalHistory,
   insertEmail,
+  insertReceipt,
   insertReport,
   listApprovalHistory,
   listDelegates,
@@ -31,6 +32,7 @@ import { APP_NAME, MILEAGE_RATE } from "@/lib/constants";
 import type {
   ApprovalHistory,
   CreateDraftInput,
+  CreateReceiptInput,
   Delegate,
   ExpenseLineItem,
   ExpenseReport,
@@ -446,6 +448,25 @@ export async function attachReceipt(
   if (!receipt) throw new Error(`Receipt ${receiptId} not found`);
   const updated = patchReceipt(receiptId, { isAttached: true })!;
   return updated;
+}
+
+/** Persist a newly captured receipt (starts unattached). */
+export async function createReceipt(
+  input: CreateReceiptInput
+): Promise<Receipt> {
+  await delay();
+  return insertReceipt({
+    id: newId("receipt"),
+    userId: input.userId,
+    imageUrl: input.imageUrl,
+    merchantName: input.merchantName,
+    merchantDate: input.merchantDate,
+    totalAmount: input.totalAmount,
+    taxAmount: input.taxAmount,
+    rawOcrData: input.rawOcrData,
+    isAttached: false,
+    createdAt: nowIso(),
+  });
 }
 
 // ---- Reference data ----

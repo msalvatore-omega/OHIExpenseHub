@@ -1,10 +1,6 @@
-import { PagePlaceholder } from "@/components/page-placeholder";
+import { redirect } from "next/navigation";
 
+// The gallery now lives at /gallery; keep /receipts working as an alias.
 export default function ReceiptsPage() {
-  return (
-    <PagePlaceholder
-      title="Receipt Gallery"
-      description="Uploaded receipts, attached and unattached."
-    />
-  );
+  redirect("/gallery");
 }
