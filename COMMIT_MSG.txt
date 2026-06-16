@@ -1,8 +1,0 @@
-feat: My Expenses page
-
-- the current user's own reports via getMyReports()
-- status filter chips with per-status counts
-- table: name, period, total, status pill, open-in-editor
-- New Expense CTA; replaces the placeholder stub
-
-Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
