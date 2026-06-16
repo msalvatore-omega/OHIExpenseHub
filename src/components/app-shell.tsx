@@ -107,20 +107,22 @@ function DesktopSidebar({ items }: { items: NavItem[] }) {
   return (
     <aside
       className={cn(
-        "hidden shrink-0 flex-col border-r border-border bg-background transition-[width] duration-200 md:flex",
+        "hidden shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width] duration-200 md:flex",
         collapsed ? "w-16" : "w-[220px]"
       )}
     >
-      {/* Header */}
+      {/* Header / wordmark */}
       <div
         className={cn(
-          "flex h-14 items-center gap-2 border-b border-border px-3",
+          "flex h-14 items-center gap-2 border-b border-sidebar-border px-3",
           collapsed && "justify-center px-0"
         )}
       >
         {!collapsed && <BrandMark />}
         {!collapsed && (
-          <span className="truncate text-sm font-semibold">{APP_NAME}</span>
+          <span className="truncate text-sm font-semibold tracking-tight text-sidebar-foreground">
+            {APP_NAME}
+          </span>
         )}
         <Button
           variant="ghost"
@@ -150,8 +152,8 @@ function DesktopSidebar({ items }: { items: NavItem[] }) {
                 "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
                 collapsed && "justify-center px-0",
                 active
-                  ? "bg-accent text-accent-foreground"
-                  : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                  ? "bg-sidebar-accent font-semibold text-sidebar-accent-foreground"
+                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
               )}
             >
               <item.icon className="size-4 shrink-0" />
@@ -162,7 +164,7 @@ function DesktopSidebar({ items }: { items: NavItem[] }) {
       </nav>
 
       {/* Footer */}
-      <div className="border-t border-border p-2">
+      <div className="border-t border-sidebar-border p-2">
         <div
           className={cn(
             "flex items-center gap-2 rounded-md px-2 py-1.5",

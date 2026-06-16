@@ -33,6 +33,7 @@
   --color-muted: var(--muted);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-secondary: var(--secondary);
+  --color-primary-hover: var(--primary-hover);
   --color-primary-foreground: var(--primary-foreground);
   --color-primary: var(--primary);
   --color-popover-foreground: var(--popover-foreground);
@@ -48,83 +49,137 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/*
+ * OHI Expense Hub design tokens.
+ * Primary = deep professional blue (#1F4E79). Neutrals carry a faint cool
+ * (slate) tint so white cards lift off the page. Status colours live in the
+ * StatusPill component (DRAFT gray / SUBMITTED blue / IN_REVIEW amber /
+ * APPROVED green / REJECTED red / PAID teal).
+ */
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  --radius: 0.5rem;
+
+  --background: oklch(0.985 0.003 247);
+  --foreground: oklch(0.23 0.02 257);
+
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
+  --card-foreground: oklch(0.23 0.02 257);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.23 0.02 257);
+
+  /* Brand blue (#1F4E79) and a darker hover/active shade. */
+  --primary: oklch(0.414 0.088 249);
+  --primary-hover: oklch(0.36 0.09 249);
   --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
+
+  --secondary: oklch(0.968 0.006 247);
+  --secondary-foreground: oklch(0.3 0.03 252);
+
+  --muted: oklch(0.968 0.006 247);
+  --muted-foreground: oklch(0.524 0.022 257);
+
+  /* Hover/active surfaces carry a subtle brand tint. */
+  --accent: oklch(0.948 0.018 248);
+  --accent-foreground: oklch(0.36 0.07 250);
+
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
+
+  --border: oklch(0.916 0.008 250);
+  --input: oklch(0.916 0.008 250);
+  --ring: oklch(0.55 0.11 249);
+
+  /* Chart palette tuned to brand + status hues. */
+  --chart-1: oklch(0.414 0.088 249);
+  --chart-2: oklch(0.62 0.1 200);
+  --chart-3: oklch(0.7 0.13 75);
+  --chart-4: oklch(0.62 0.14 150);
+  --chart-5: oklch(0.6 0.2 25);
+
+  /* Branded sidebar surface. */
+  --sidebar: oklch(0.972 0.008 248);
+  --sidebar-foreground: oklch(0.3 0.02 257);
+  --sidebar-primary: oklch(0.414 0.088 249);
   --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --sidebar-accent: oklch(0.93 0.022 248);
+  --sidebar-accent-foreground: oklch(0.36 0.07 250);
+  --sidebar-border: oklch(0.9 0.012 250);
+  --sidebar-ring: oklch(0.55 0.11 249);
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
+  --background: oklch(0.2 0.015 257);
+  --foreground: oklch(0.97 0.005 247);
+
+  --card: oklch(0.245 0.018 257);
+  --card-foreground: oklch(0.97 0.005 247);
+  --popover: oklch(0.245 0.018 257);
+  --popover-foreground: oklch(0.97 0.005 247);
+
+  --primary: oklch(0.62 0.13 250);
+  --primary-hover: oklch(0.68 0.13 250);
+  --primary-foreground: oklch(0.16 0.02 257);
+
+  --secondary: oklch(0.3 0.02 257);
+  --secondary-foreground: oklch(0.97 0.005 247);
+
+  --muted: oklch(0.3 0.02 257);
+  --muted-foreground: oklch(0.72 0.02 257);
+
+  --accent: oklch(0.34 0.03 252);
+  --accent-foreground: oklch(0.97 0.005 247);
+
   --destructive: oklch(0.704 0.191 22.216);
+
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --ring: oklch(0.62 0.13 250);
+
+  --chart-1: oklch(0.62 0.13 250);
+  --chart-2: oklch(0.66 0.1 200);
+  --chart-3: oklch(0.74 0.13 75);
+  --chart-4: oklch(0.68 0.14 150);
+  --chart-5: oklch(0.66 0.2 25);
+
+  --sidebar: oklch(0.235 0.018 257);
+  --sidebar-foreground: oklch(0.97 0.005 247);
+  --sidebar-primary: oklch(0.62 0.13 250);
   --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.32 0.03 252);
+  --sidebar-accent-foreground: oklch(0.97 0.005 247);
   --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --sidebar-ring: oklch(0.62 0.13 250);
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
-  body {
-    @apply bg-background text-foreground;
-  }
   html {
     @apply font-sans;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+
+  /* Type scale: heavier, tighter headings; comfortable body. */
+  h1 {
+    @apply font-heading text-2xl font-semibold tracking-tight;
+  }
+  h2 {
+    @apply font-heading text-lg font-semibold tracking-tight;
+  }
+  h3 {
+    @apply font-heading text-base font-semibold tracking-tight;
+  }
+
+  ::selection {
+    background-color: color-mix(in oklch, var(--primary) 22%, transparent);
+  }
+}
+
+/* Skeleton shimmer sweep. */
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
   }
 }
