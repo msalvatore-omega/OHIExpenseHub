@@ -9,5 +9,5 @@ export const MILEAGE_RATE = 0.725;
 /** localStorage key for the persisted mock database. */
 export const STORAGE_KEY = "ohi-prototype-data";
 
-/** Brand palette. */
-export const BRAND_BLUE = "#1F4E79";
+/** Brand palette — "Deep Harbor" navy (matches the --primary token). */
+export const BRAND_BLUE = "#0B2545";

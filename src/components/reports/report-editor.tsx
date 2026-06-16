@@ -441,7 +441,7 @@ function EditorForm({
             {isDraft && (
               <Button
                 type="submit"
-                className="bg-blue-600 text-white hover:bg-blue-600"
+                className="bg-primary text-primary-foreground hover:bg-primary-hover"
               >
                 Submit for Approval
               </Button>
