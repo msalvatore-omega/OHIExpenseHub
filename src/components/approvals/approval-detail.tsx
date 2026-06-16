@@ -20,6 +20,7 @@ import { toastQueuedNotifications } from "@/lib/notify";
 import { dashboardKeys } from "@/components/dashboard/use-dashboard-data";
 import type { ApprovalAction, Receipt } from "@/lib/types";
 import { StatusPill } from "@/components/status-pill";
+import { ReportExportButtons } from "@/components/reports/report-export-buttons";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -144,9 +145,12 @@ export function ApprovalDetail({ reportId }: { reportId: string }) {
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-6 py-8 pb-40">
       {/* Read-only header */}
       <header className="flex flex-col gap-4">
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <h1>{report.reportName}</h1>
-          <StatusPill status={report.status} />
+          <div className="flex items-center gap-3">
+            <StatusPill status={report.status} />
+            <ReportExportButtons reportId={reportId} />
+          </div>
         </div>
         <div className="grid grid-cols-2 gap-4 rounded-xl border border-border bg-card p-4 shadow-sm sm:grid-cols-4">
           <HeaderField

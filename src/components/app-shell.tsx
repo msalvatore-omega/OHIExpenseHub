@@ -107,7 +107,7 @@ function DesktopSidebar({ items }: { items: NavItem[] }) {
   return (
     <aside
       className={cn(
-        "hidden shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width] duration-200 md:flex",
+        "hidden shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width] duration-200 md:flex print:!hidden",
         collapsed ? "w-16" : "w-[220px]"
       )}
     >
@@ -211,7 +211,7 @@ function MobileTopBar() {
   const router = useRouter();
 
   return (
-    <header className="flex h-14 items-center justify-between border-b border-border px-4 md:hidden">
+    <header className="flex h-14 items-center justify-between border-b border-border px-4 md:hidden print:hidden">
       <div className="flex items-center gap-2">
         <BrandMark />
         <span className="text-sm font-semibold">{APP_NAME}</span>
@@ -257,7 +257,7 @@ function MobileBottomBar({ items }: { items: NavItem[] }) {
   const overflow = hasOverflow ? items.slice(MAX_BOTTOM_TABS - 1) : [];
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 flex items-stretch border-t border-border bg-background/95 backdrop-blur md:hidden">
+    <nav className="fixed inset-x-0 bottom-0 z-40 flex items-stretch border-t border-border bg-background/95 backdrop-blur md:hidden print:hidden">
       {primary.map((item) => (
         <BottomTab key={item.href} item={item} active={isActive(item.href)} />
       ))}

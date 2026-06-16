@@ -34,7 +34,7 @@ export function DevRoleSwitcher() {
   }
 
   return (
-    <div className="fixed right-4 bottom-4 z-[100]">
+    <div className="fixed right-4 bottom-4 z-[100] print:hidden">
       <div className="flex flex-col gap-2 rounded-lg border border-border bg-background/95 p-3 shadow-lg ring-1 ring-foreground/5 backdrop-blur">
         <div className="flex items-center gap-2">
           <Badge
