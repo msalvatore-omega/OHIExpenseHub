@@ -30,6 +30,7 @@ import {
 } from "@/lib/data/store";
 import { APP_NAME, MILEAGE_RATE } from "@/lib/constants";
 import type {
+  ApprovalActionResult,
   ApprovalHistory,
   CreateDraftInput,
   CreateReceiptInput,
@@ -133,6 +134,53 @@ function sendMockEmail(to: string, subject: string, body: string): MockEmail {
     body,
     sentAt: nowIso(),
   });
+}
+
+/** The accounting mailbox a payment-ready notice goes to. */
+function accountingEmail(): string {
+  return (
+    listUsers().find((u) => u.role === "ACCOUNTING")?.email ??
+    "accounting@ohi.example.com"
+  );
+}
+
+/** Throw with a clear message if a report isn't ready to submit. */
+function assertSubmittable(report: ExpenseReport): void {
+  if (report.status !== "DRAFT") {
+    throw new Error("Only draft reports can be submitted.");
+  }
+  if (!report.reportName?.trim()) {
+    throw new Error("Report name is required.");
+  }
+  if (!report.periodFrom || !report.periodTo) {
+    throw new Error("Reporting period is required.");
+  }
+  const items = listLineItems(report.id);
+  if (items.length === 0) {
+    throw new Error("Add at least one line item before submitting.");
+  }
+  const mileageTypeIds = new Set(
+    listExpenseTypes().filter((t) => t.isMileage).map((t) => t.id)
+  );
+  for (const li of items) {
+    if (
+      !li.expenseDate ||
+      !li.purposeOfTrip ||
+      !li.description ||
+      !li.city ||
+      !li.state ||
+      !li.country ||
+      !li.expenseTypeId
+    ) {
+      throw new Error("Every line item must have all fields completed.");
+    }
+    const effective = mileageTypeIds.has(li.expenseTypeId)
+      ? li.miles ?? 0
+      : li.amount ?? 0;
+    if (effective <= 0) {
+      throw new Error("Every line item must have a positive amount.");
+    }
+  }
 }
 
 // ---- KPIs ----
@@ -271,10 +319,11 @@ export async function replaceLineItems(
   return normalized;
 }
 
-export async function submitReport(id: string): Promise<ExpenseReport> {
+export async function submitReport(id: string): Promise<ApprovalActionResult> {
   await delay();
   const report = findReport(id);
   if (!report) throw new Error(`Report ${id} not found`);
+  assertSubmittable(report);
 
   recalcReportTotal(id);
   const timestamp = nowIso();
@@ -283,9 +332,13 @@ export async function submitReport(id: string): Promise<ExpenseReport> {
     submittedAt: timestamp,
   })!;
 
-  // Record a pending approval for the submitter's manager (the approver).
+  // Approver = submitter's manager; fall back to the first ADMIN.
   const submitter = userById(report.submitterId);
-  const approver = userById(submitter?.managerId ?? undefined);
+  const approver =
+    userById(submitter?.managerId ?? undefined) ??
+    listUsers().find((u) => u.role === "ADMIN");
+
+  const notifications: MockEmail[] = [];
   if (approver) {
     insertApprovalHistory({
       id: newId("history"),
@@ -294,79 +347,96 @@ export async function submitReport(id: string): Promise<ExpenseReport> {
       action: "PENDING",
       createdAt: timestamp,
     });
-    sendMockEmail(
-      approver.email,
-      `[${APP_NAME}] Report awaiting your approval: ${report.reportName}`,
-      `${submitter?.name ?? "A submitter"} submitted an expense report (${report.reportName}) totaling ${currency(updated.totalAmount)} for your approval.`
+    notifications.push(
+      sendMockEmail(
+        approver.email,
+        `Action Required: ${report.reportName} needs your approval`,
+        `${submitter?.name ?? "A submitter"} submitted an expense report (${report.reportName}) totaling ${currency(updated.totalAmount)} for your approval.`
+      )
     );
   }
-  return updated;
+  return { report: updated, notifications };
 }
 
 export async function approveReport(
   id: string,
   comment?: string
-): Promise<ExpenseReport> {
+): Promise<ApprovalActionResult> {
   await delay();
   const report = findReport(id);
   if (!report) throw new Error(`Report ${id} not found`);
 
   const timestamp = nowIso();
   const submitter = userById(report.submitterId);
-  const approver = userById(submitter?.managerId ?? undefined);
+  const approverId =
+    pendingApproverId(report) ?? currentApproverId(report) ?? "system";
 
   insertApprovalHistory({
     id: newId("history"),
     reportId: id,
-    approverId: approver?.id ?? "system",
+    approverId,
     action: "APPROVED",
     comment,
     createdAt: timestamp,
   });
   const updated = patchReport(id, { status: "APPROVED" })!;
 
+  const notifications: MockEmail[] = [];
   const recipient = userById(report.paidToId) ?? submitter;
   if (recipient) {
-    sendMockEmail(
-      recipient.email,
-      `[${APP_NAME}] Your report was approved: ${report.reportName}`,
-      `Your expense report (${report.reportName}) totaling ${currency(updated.totalAmount)} was approved${comment ? `. Note: ${comment}` : "."}`
+    notifications.push(
+      sendMockEmail(
+        recipient.email,
+        `Approved: ${report.reportName}`,
+        `Your expense report (${report.reportName}) totaling ${currency(updated.totalAmount)} was approved${comment ? `. Note: ${comment}` : "."}`
+      )
     );
   }
-  return updated;
+  notifications.push(
+    sendMockEmail(
+      accountingEmail(),
+      `Ready for Payment: ${report.reportName}`,
+      `${report.reportName} (${currency(updated.totalAmount)}) for ${userName(report.paidToId)} has been approved and is ready for payment.`
+    )
+  );
+  return { report: updated, notifications };
 }
 
 export async function rejectReport(
   id: string,
   comment?: string
-): Promise<ExpenseReport> {
+): Promise<ApprovalActionResult> {
   await delay();
   const report = findReport(id);
   if (!report) throw new Error(`Report ${id} not found`);
 
   const timestamp = nowIso();
   const submitter = userById(report.submitterId);
-  const approver = userById(submitter?.managerId ?? undefined);
+  const approverId =
+    pendingApproverId(report) ?? currentApproverId(report) ?? "system";
 
   insertApprovalHistory({
     id: newId("history"),
     reportId: id,
-    approverId: approver?.id ?? "system",
+    approverId,
     action: "REJECTED",
     comment,
     createdAt: timestamp,
   });
   const updated = patchReport(id, { status: "REJECTED" })!;
 
+  const notifications: MockEmail[] = [];
   const recipient = userById(report.paidToId) ?? submitter;
   if (recipient) {
-    sendMockEmail(
-      recipient.email,
-      `[${APP_NAME}] Your report was rejected: ${report.reportName}`,
-      `Your expense report (${report.reportName}) was rejected${approver ? ` by ${approver.name}` : ""}.${comment ? ` Reason: ${comment}` : ""}`
+    notifications.push(
+      sendMockEmail(
+        recipient.email,
+        `Changes Requested: ${report.reportName}`,
+        `Your expense report (${report.reportName}) was rejected by ${userName(approverId)}.${comment ? ` Reason: ${comment}` : ""}`
+      )
     );
   }
-  return updated;
+  return { report: updated, notifications };
 }
 
 export async function markPaid(id: string): Promise<ExpenseReport> {

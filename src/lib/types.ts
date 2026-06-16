@@ -123,6 +123,12 @@ export interface ReportDetail extends ExpenseReport {
   approvalHistory: ApprovalHistory[];
 }
 
+/** Result of an approval action: the updated report + the notifications queued. */
+export interface ApprovalActionResult {
+  report: ExpenseReport;
+  notifications: MockEmail[];
+}
+
 /** A report enriched with the names and workflow step for routing/approval views. */
 export interface ReportRoutingRow {
   report: ExpenseReport;

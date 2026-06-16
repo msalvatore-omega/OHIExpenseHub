@@ -35,6 +35,7 @@ import {
   updateReport,
 } from "@/lib/data";
 import { useSession } from "@/lib/auth/mock-session";
+import { toastQueuedNotifications } from "@/lib/notify";
 import type { LineItemInput, ReportDetail } from "@/lib/types";
 import { dashboardKeys } from "@/components/dashboard/use-dashboard-data";
 import { StatusPill } from "@/components/status-pill";
@@ -83,6 +84,20 @@ export function ReportEditor({ reportId }: { reportId: string }) {
     queryFn: () => getDelegatedPrincipals(user.id),
   });
   const users = useQuery({ queryKey: ["users"], queryFn: getUsers });
+
+  // Opening a rejected report reopens it as a DRAFT for editing.
+  const queryClient = useQueryClient();
+  const reopenedRef = React.useRef(false);
+  const status = report.data?.status;
+  React.useEffect(() => {
+    if (status === "REJECTED" && !reopenedRef.current) {
+      reopenedRef.current = true;
+      updateReport(reportId, { status: "DRAFT" }).then(() => {
+        queryClient.invalidateQueries({ queryKey: ["report", reportId] });
+        queryClient.invalidateQueries({ queryKey: dashboardKeys.all });
+      });
+    }
+  }, [status, reportId, queryClient]);
 
   const loading =
     report.isLoading ||
@@ -242,9 +257,9 @@ function EditorForm({
       await persist(values);
       return submitReport(report.id);
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: dashboardKeys.all });
-      toast.success("Submitted for approval");
+      toastQueuedNotifications(result.notifications);
       router.push("/dashboard");
     },
     onError: (err) =>

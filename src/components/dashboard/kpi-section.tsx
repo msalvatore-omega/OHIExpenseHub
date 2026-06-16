@@ -22,6 +22,7 @@ import { cn } from "@/lib/utils";
 import { BRAND_BLUE } from "@/lib/constants";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { approveReport, deleteReport, rejectReport } from "@/lib/data";
+import { toastQueuedNotifications } from "@/lib/notify";
 import type { ExpenseReport, ReportRoutingRow } from "@/lib/types";
 import {
   useApprovalQueue,
@@ -87,18 +88,18 @@ export function KpiSection({ userId }: { userId: string }) {
 
   const approveMutation = useMutation({
     mutationFn: (id: string) => approveReport(id),
-    onSuccess: () => {
+    onSuccess: (result) => {
       invalidate();
-      toast.success("Report approved");
+      toastQueuedNotifications(result.notifications);
     },
     onError: onMutationError,
   });
 
   const rejectMutation = useMutation({
     mutationFn: (id: string) => rejectReport(id),
-    onSuccess: () => {
+    onSuccess: (result) => {
       invalidate();
-      toast.success("Report rejected");
+      toastQueuedNotifications(result.notifications);
     },
     onError: onMutationError,
   });
