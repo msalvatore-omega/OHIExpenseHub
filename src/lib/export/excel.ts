@@ -6,13 +6,57 @@
 import { utils, write, type CellObject, type WorkSheet } from "xlsx-js-style";
 
 import type {
+  DuplicateGroup,
   ExpenseType,
+  LedgerEntry,
   Receipt,
   ReportDetail,
   User,
 } from "@/lib/types";
 
 type StyledCell = CellObject & { s?: Record<string, unknown> };
+
+const HEADER_STYLE = {
+  font: { bold: true, color: { rgb: "FFFFFF" } },
+  fill: { fgColor: { rgb: "0B2545" } },
+  alignment: { horizontal: "left" },
+};
+
+function styleHeader(ws: WorkSheet, colCount: number) {
+  for (let c = 0; c < colCount; c++) {
+    const cell = ws[utils.encode_cell({ r: 0, c })] as StyledCell | undefined;
+    if (cell) cell.s = HEADER_STYLE;
+  }
+}
+
+function applyCurrency(ws: WorkSheet, rowCount: number, cols: number[]) {
+  for (let r = 1; r <= rowCount; r++) {
+    for (const c of cols) {
+      const cell = ws[utils.encode_cell({ r, c })] as CellObject | undefined;
+      if (cell && typeof cell.v === "number") cell.z = CURRENCY_FMT;
+    }
+  }
+}
+
+function downloadWorkbook(ws: WorkSheet, sheetName: string, fileBase: string) {
+  if (ws["!ref"]) ws["!autofilter"] = { ref: ws["!ref"] };
+  const wb = utils.book_new();
+  utils.book_append_sheet(wb, ws, sheetName);
+  const data = write(wb, { type: "array", bookType: "xlsx" }) as ArrayBuffer;
+  const blob = new Blob([data], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const url = URL.createObjectURL(blob);
+  const safe =
+    fileBase.replace(/[^\w.-]+/g, "_").replace(/^_+|_+$/g, "") || "export";
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${safe}.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
 
 const HEADERS = [
   "Report Name",
@@ -98,48 +142,52 @@ export function exportReportToExcel(ctx: ExcelExportContext): void {
   });
 
   const ws: WorkSheet = utils.aoa_to_sheet([[...HEADERS], ...rows]);
-
-  // Column widths.
   ws["!cols"] = HEADERS.map((h) => ({ wch: Math.max(12, h.length + 2) }));
+  styleHeader(ws, HEADERS.length);
+  applyCurrency(ws, rows.length, CURRENCY_COLS);
+  downloadWorkbook(ws, "Expense Report", report.reportName || "expense-report");
+}
 
-  // Bold navy header row.
-  for (let c = 0; c < HEADERS.length; c++) {
-    const cell = ws[utils.encode_cell({ r: 0, c })] as StyledCell | undefined;
-    if (!cell) continue;
-    cell.s = {
-      font: { bold: true, color: { rgb: "FFFFFF" } },
-      fill: { fgColor: { rgb: "0B2545" } },
-      alignment: { horizontal: "left" },
-    };
-  }
+const DUP_HEADERS = [
+  "Group",
+  "Confidence",
+  "Reason",
+  "Recommended Action",
+  "Line Item ID",
+  "Report",
+  "Date",
+  "Expense Type",
+  "Amount",
+  "Group Duplicated Total",
+] as const;
 
-  // Currency format on amount columns.
-  for (let r = 1; r <= rows.length; r++) {
-    for (const c of CURRENCY_COLS) {
-      const cell = ws[utils.encode_cell({ r, c })] as CellObject | undefined;
-      if (cell && typeof cell.v === "number") cell.z = CURRENCY_FMT;
+export function exportDuplicatesToExcel(
+  groups: DuplicateGroup[],
+  detailsById: Map<string, LedgerEntry>
+): void {
+  const rows: (string | number)[][] = [];
+  for (const g of groups) {
+    const ids = g.lineItemIds.length > 0 ? g.lineItemIds : [""];
+    for (const id of ids) {
+      const d = id ? detailsById.get(id) : undefined;
+      rows.push([
+        g.duplicateGroupId,
+        g.confidence,
+        g.reason,
+        g.recommendedAction,
+        id,
+        d?.reportName ?? "",
+        d?.expenseDate ?? "",
+        d?.expenseTypeName ?? "",
+        d?.amount ?? "",
+        g.totalDuplicatedAmount,
+      ]);
     }
   }
 
-  // Auto-filter across the full range.
-  if (ws["!ref"]) ws["!autofilter"] = { ref: ws["!ref"] };
-
-  const wb = utils.book_new();
-  utils.book_append_sheet(wb, ws, "Expense Report");
-
-  const data = write(wb, { type: "array", bookType: "xlsx" }) as ArrayBuffer;
-  const blob = new Blob([data], {
-    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  });
-  const url = URL.createObjectURL(blob);
-  const safeName =
-    report.reportName.replace(/[^\w.-]+/g, "_").replace(/^_+|_+$/g, "") ||
-    "expense-report";
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `${safeName}.xlsx`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
+  const ws: WorkSheet = utils.aoa_to_sheet([[...DUP_HEADERS], ...rows]);
+  ws["!cols"] = DUP_HEADERS.map((h) => ({ wch: Math.max(12, h.length + 2) }));
+  styleHeader(ws, DUP_HEADERS.length);
+  applyCurrency(ws, rows.length, [8, 9]); // Amount, Group Duplicated Total
+  downloadWorkbook(ws, "Duplicates", "duplicate-report");
 }

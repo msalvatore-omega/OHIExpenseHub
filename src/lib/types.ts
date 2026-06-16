@@ -197,6 +197,53 @@ export interface OcrResult {
   previewUrl?: string;
 }
 
+// ---- Accounting / analytics ----
+
+export interface AnalyticsFilter {
+  from?: string;
+  to?: string;
+  departments?: string[];
+  statuses?: ReportStatus[];
+}
+
+/** A line item flattened with its report + people + type metadata. */
+export interface LedgerEntry {
+  lineItemId: string;
+  reportId: string;
+  reportName: string;
+  status: ReportStatus;
+  submitterId: string;
+  submitterName: string;
+  department: string;
+  paidToId: string;
+  paidToName: string;
+  expenseTypeId: string;
+  expenseTypeName: string;
+  accountingCode: string;
+  amount: number;
+  expenseDate: string;
+  periodFrom: string;
+  periodTo: string;
+}
+
+export interface AccountingReportRow {
+  report: ExpenseReport;
+  submitterName: string;
+  paidToName: string;
+  department: string;
+}
+
+export interface DelegateInput {
+  principalId: string;
+  delegateId: string;
+}
+
+export interface ExpenseTypeInput {
+  displayName: string;
+  accountingCode: string;
+  isMileage: boolean;
+}
+
 // ---- Mock duplicate detection ----
 
 export type DuplicateConfidence = "HIGH" | "MEDIUM" | "LOW";

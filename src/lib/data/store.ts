@@ -7,10 +7,13 @@ import { STORAGE_KEY } from "@/lib/constants";
 import { createSeedData, type Database } from "@/lib/data/seed";
 import type {
   ApprovalHistory,
+  Delegate,
   ExpenseLineItem,
   ExpenseReport,
+  ExpenseType,
   MockEmail,
   Receipt,
+  User,
 } from "@/lib/types";
 
 let db: Database | null = null;
@@ -80,12 +83,51 @@ export function listUsers() {
   return getDb().users;
 }
 
+export function patchUser(id: string, patch: Partial<User>): User | undefined {
+  const user = getDb().users.find((u) => u.id === id);
+  if (!user) return undefined;
+  Object.assign(user, patch);
+  persist();
+  return user;
+}
+
 export function listExpenseTypes() {
   return getDb().expenseTypes;
 }
 
+export function insertExpenseType(type: ExpenseType): ExpenseType {
+  getDb().expenseTypes.push(type);
+  persist();
+  return type;
+}
+
+export function patchExpenseType(
+  id: string,
+  patch: Partial<ExpenseType>
+): ExpenseType | undefined {
+  const type = getDb().expenseTypes.find((t) => t.id === id);
+  if (!type) return undefined;
+  Object.assign(type, patch);
+  persist();
+  return type;
+}
+
 export function listDelegates() {
   return getDb().delegates;
+}
+
+export function insertDelegate(delegate: Delegate): Delegate {
+  getDb().delegates.push(delegate);
+  persist();
+  return delegate;
+}
+
+export function removeDelegate(id: string): boolean {
+  const data = getDb();
+  const exists = data.delegates.some((d) => d.id === id);
+  data.delegates = data.delegates.filter((d) => d.id !== id);
+  persist();
+  return exists;
 }
 
 // ---- Reports ----

@@ -22,19 +22,29 @@ import {
   listUsers,
   newId,
   nowIso,
+  insertDelegate,
+  insertExpenseType,
+  patchExpenseType,
   patchReceipt,
   patchReport,
+  patchUser,
   recalcReportTotal,
+  removeDelegate,
   removeReport,
   replaceLineItemsForReport,
 } from "@/lib/data/store";
 import { APP_NAME, MILEAGE_RATE } from "@/lib/constants";
 import type {
+  AccountingReportRow,
+  AnalyticsFilter,
   ApprovalActionResult,
   ApprovalHistory,
   CreateDraftInput,
   CreateReceiptInput,
   Delegate,
+  DelegateInput,
+  ExpenseTypeInput,
+  LedgerEntry,
   ExpenseLineItem,
   ExpenseReport,
   ExpenseType,
@@ -439,21 +449,24 @@ export async function rejectReport(
   return { report: updated, notifications };
 }
 
-export async function markPaid(id: string): Promise<ExpenseReport> {
+export async function markPaid(id: string): Promise<ApprovalActionResult> {
   await delay();
   const report = findReport(id);
   if (!report) throw new Error(`Report ${id} not found`);
 
   const updated = patchReport(id, { status: "PAID" })!;
+  const notifications: MockEmail[] = [];
   const recipient = userById(report.paidToId);
   if (recipient) {
-    sendMockEmail(
-      recipient.email,
-      `[${APP_NAME}] Reimbursement paid: ${report.reportName}`,
-      `Your reimbursement for (${report.reportName}) totaling ${currency(updated.totalAmount)} has been paid.`
+    notifications.push(
+      sendMockEmail(
+        recipient.email,
+        `Reimbursement Paid: ${report.reportName}`,
+        `Your reimbursement for (${report.reportName}) totaling ${currency(updated.totalAmount)} has been paid.`
+      )
     );
   }
-  return updated;
+  return { report: updated, notifications };
 }
 
 // ---- Dashboard / personal views ----
@@ -567,6 +580,149 @@ export async function getDelegatedPrincipals(
 export async function getExpenseTypes(): Promise<ExpenseType[]> {
   await delay();
   return [...listExpenseTypes()];
+}
+
+// ---- Accounting / analytics ----
+
+/** Flatten every line item with its report + people + type metadata. */
+function buildLedger(): LedgerEntry[] {
+  const userById = new Map(listUsers().map((u) => [u.id, u]));
+  const typeById = new Map(listExpenseTypes().map((t) => [t.id, t]));
+  const reportById = new Map(listReports().map((r) => [r.id, r]));
+
+  return listLineItems().flatMap((li) => {
+    const report = reportById.get(li.reportId);
+    if (!report) return [];
+    const submitter = userById.get(report.submitterId);
+    const type = typeById.get(li.expenseTypeId);
+    return [
+      {
+        lineItemId: li.id,
+        reportId: report.id,
+        reportName: report.reportName,
+        status: report.status,
+        submitterId: report.submitterId,
+        submitterName: submitter?.name ?? "—",
+        department: submitter?.department ?? "—",
+        paidToId: report.paidToId,
+        paidToName: userById.get(report.paidToId)?.name ?? "—",
+        expenseTypeId: li.expenseTypeId,
+        expenseTypeName: type?.displayName ?? "—",
+        accountingCode: type?.accountingCode ?? "",
+        amount: li.amount,
+        expenseDate: li.expenseDate,
+        periodFrom: report.periodFrom,
+        periodTo: report.periodTo,
+      },
+    ];
+  });
+}
+
+function entryMatches(e: LedgerEntry, filter?: AnalyticsFilter): boolean {
+  if (filter?.statuses?.length && !filter.statuses.includes(e.status)) return false;
+  if (filter?.departments?.length && !filter.departments.includes(e.department))
+    return false;
+  if (filter?.from && e.expenseDate < filter.from) return false;
+  if (filter?.to && e.expenseDate > filter.to) return false;
+  return true;
+}
+
+export async function getLedgerEntries(
+  filter?: AnalyticsFilter
+): Promise<LedgerEntry[]> {
+  await delay();
+  return buildLedger().filter((e) => entryMatches(e, filter));
+}
+
+/** Resolve specific line items (used by duplicate detection display). */
+export async function getLineItemDetails(ids: string[]): Promise<LedgerEntry[]> {
+  await delay();
+  const set = new Set(ids);
+  return buildLedger().filter((e) => set.has(e.lineItemId));
+}
+
+export async function getDepartments(): Promise<string[]> {
+  await delay();
+  return [...new Set(listUsers().map((u) => u.department))].sort();
+}
+
+export async function getAccountingReports(
+  filter?: AnalyticsFilter
+): Promise<AccountingReportRow[]> {
+  await delay();
+  const userById = new Map(listUsers().map((u) => [u.id, u]));
+  return listReports()
+    .filter((r) => {
+      if (filter?.statuses?.length && !filter.statuses.includes(r.status))
+        return false;
+      const dept = userById.get(r.submitterId)?.department ?? "—";
+      if (filter?.departments?.length && !filter.departments.includes(dept))
+        return false;
+      if (filter?.from && r.periodTo < filter.from) return false;
+      if (filter?.to && r.periodFrom > filter.to) return false;
+      return true;
+    })
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+    .map((r) => ({
+      report: r,
+      submitterName: userById.get(r.submitterId)?.name ?? "—",
+      paidToName: userById.get(r.paidToId)?.name ?? "—",
+      department: userById.get(r.submitterId)?.department ?? "—",
+    }));
+}
+
+// ---- Admin CRUD ----
+
+export async function updateUser(
+  id: string,
+  patch: Partial<User>
+): Promise<User> {
+  await delay();
+  const user = patchUser(id, patch);
+  if (!user) throw new Error(`User ${id} not found`);
+  return user;
+}
+
+export async function getDelegates(): Promise<Delegate[]> {
+  await delay();
+  return [...listDelegates()];
+}
+
+export async function createDelegate(input: DelegateInput): Promise<Delegate> {
+  await delay();
+  return insertDelegate({
+    id: newId("delegate"),
+    principalId: input.principalId,
+    delegateId: input.delegateId,
+    isActive: true,
+  });
+}
+
+export async function deleteDelegate(id: string): Promise<void> {
+  await delay();
+  if (!removeDelegate(id)) throw new Error(`Delegate ${id} not found`);
+}
+
+export async function createExpenseType(
+  input: ExpenseTypeInput
+): Promise<ExpenseType> {
+  await delay();
+  return insertExpenseType({
+    id: newId("etype"),
+    displayName: input.displayName,
+    accountingCode: input.accountingCode,
+    isMileage: input.isMileage,
+  });
+}
+
+export async function updateExpenseType(
+  id: string,
+  patch: Partial<ExpenseType>
+): Promise<ExpenseType> {
+  await delay();
+  const type = patchExpenseType(id, patch);
+  if (!type) throw new Error(`Expense type ${id} not found`);
+  return type;
 }
 
 // ---- Mock email outbox ----
