@@ -25,15 +25,18 @@ import {
   patchReport,
   recalcReportTotal,
   removeReport,
+  replaceLineItemsForReport,
 } from "@/lib/data/store";
-import { APP_NAME } from "@/lib/constants";
+import { APP_NAME, MILEAGE_RATE } from "@/lib/constants";
 import type {
   ApprovalHistory,
   CreateDraftInput,
   Delegate,
+  ExpenseLineItem,
   ExpenseReport,
   ExpenseType,
   Kpis,
+  LineItemInput,
   MockEmail,
   Receipt,
   ReceiptFilter,
@@ -218,6 +221,52 @@ export async function deleteReport(id: string): Promise<void> {
   await delay();
   const ok = removeReport(id);
   if (!ok) throw new Error(`Report ${id} not found`);
+}
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+/**
+ * Replace a report's line items wholesale, normalizing mileage rows
+ * (amount = miles * rate) and recomputing the report total.
+ */
+export async function replaceLineItems(
+  reportId: string,
+  items: LineItemInput[]
+): Promise<ExpenseLineItem[]> {
+  await delay();
+  const report = findReport(reportId);
+  if (!report) throw new Error(`Report ${reportId} not found`);
+
+  const mileageTypeIds = new Set(
+    listExpenseTypes().filter((t) => t.isMileage).map((t) => t.id)
+  );
+
+  const normalized: ExpenseLineItem[] = items.map((it) => {
+    const isMileage = mileageTypeIds.has(it.expenseTypeId);
+    const miles = isMileage ? it.miles : undefined;
+    const calculatedAmount =
+      isMileage && miles != null ? round2(miles * MILEAGE_RATE) : undefined;
+    const amount = isMileage ? calculatedAmount ?? 0 : it.amount ?? 0;
+    return {
+      id: it.id ?? newId("line"),
+      reportId,
+      expenseDate: it.expenseDate,
+      purposeOfTrip: it.purposeOfTrip,
+      description: it.description,
+      city: it.city,
+      state: it.state,
+      country: it.country,
+      expenseTypeId: it.expenseTypeId,
+      amount,
+      miles,
+      calculatedAmount,
+      receiptId: it.receiptId,
+    };
+  });
+
+  replaceLineItemsForReport(reportId, normalized);
+  recalcReportTotal(reportId);
+  return normalized;
 }
 
 export async function submitReport(id: string): Promise<ExpenseReport> {
@@ -409,6 +458,19 @@ export async function getUsers(): Promise<User[]> {
 export async function getDelegatesFor(userId: string): Promise<Delegate[]> {
   await delay();
   return listDelegates().filter((d) => d.principalId === userId);
+}
+
+/** Principals the given user may submit on behalf of (active delegations). */
+export async function getDelegatedPrincipals(
+  delegateId: string
+): Promise<User[]> {
+  await delay();
+  const principalIds = new Set(
+    listDelegates()
+      .filter((d) => d.delegateId === delegateId && d.isActive)
+      .map((d) => d.principalId)
+  );
+  return listUsers().filter((u) => principalIds.has(u.id));
 }
 
 export async function getExpenseTypes(): Promise<ExpenseType[]> {

@@ -1,10 +1,6 @@
-import { PagePlaceholder } from "@/components/page-placeholder";
+import { redirect } from "next/navigation";
 
+// Legacy placeholder route — the real entry flow lives at /reports/new.
 export default function NewExpensePage() {
-  return (
-    <PagePlaceholder
-      title="New Expense"
-      description="Create a new expense report and add line items."
-    />
-  );
+  redirect("/reports/new");
 }

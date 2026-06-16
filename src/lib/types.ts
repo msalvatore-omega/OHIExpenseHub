@@ -152,6 +152,21 @@ export interface CreateDraftInput {
   periodTo: string;
 }
 
+/** A line item as submitted from the editor (ids optional for new rows). */
+export interface LineItemInput {
+  id?: string;
+  expenseDate: string;
+  purposeOfTrip: string;
+  description: string;
+  city: string;
+  state: string;
+  country: string;
+  expenseTypeId: string;
+  amount?: number;
+  miles?: number;
+  receiptId?: string;
+}
+
 // ---- Mock OCR ----
 
 export interface OcrResult {

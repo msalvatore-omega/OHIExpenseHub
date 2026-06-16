@@ -166,6 +166,18 @@ export function removeLineItem(id: string): void {
   persist();
 }
 
+/** Replace all line items for a report with the provided set. */
+export function replaceLineItemsForReport(
+  reportId: string,
+  items: ExpenseLineItem[]
+): void {
+  const data = getDb();
+  data.lineItems = data.lineItems
+    .filter((li) => li.reportId !== reportId)
+    .concat(items);
+  persist();
+}
+
 // ---- Receipts ----
 
 export function listReceipts(): Receipt[] {
