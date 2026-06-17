@@ -239,7 +239,6 @@ function EditorForm({
       await replaceLineItems(report.id, values.lineItems.map(toInput));
       return values;
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [report.id, report.submitterId]
   );
 
@@ -291,10 +290,13 @@ function EditorForm({
 
   // ---- submit confirm dialog ----
   const [confirmOpen, setConfirmOpen] = React.useState(false);
-  const pendingValues = React.useRef<ReportFormValues | null>(null);
+  // The validated values awaiting confirmation. State (not a ref) so it isn't
+  // read during render.
+  const [pendingValues, setPendingValues] =
+    React.useState<ReportFormValues | null>(null);
 
   const onValidSubmit = (values: ReportFormValues) => {
-    pendingValues.current = values;
+    setPendingValues(values);
     setConfirmOpen(true);
   };
 
@@ -477,10 +479,9 @@ function EditorForm({
               className="bg-blue-600 text-white hover:bg-blue-600"
               disabled={submitMutation.isPending}
               onClick={() => {
-                const values = pendingValues.current;
-                if (!values) return;
+                if (!pendingValues) return;
                 setConfirmOpen(false);
-                submitMutation.mutate(values);
+                submitMutation.mutate(pendingValues);
               }}
             >
               Submit

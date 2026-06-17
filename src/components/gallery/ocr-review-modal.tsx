@@ -64,6 +64,7 @@ export function OcrReviewModal({
   // Re-seed the form whenever a new receipt comes up for review.
   React.useEffect(() => {
     if (!item) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMerchantName(item.ocr.merchantName ?? "");
     setDate(item.ocr.transactionDate ?? "");
     setTotal(item.ocr.total != null ? String(item.ocr.total) : "");
