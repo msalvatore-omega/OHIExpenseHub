@@ -5,11 +5,15 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   Bar,
   BarChart,
   CartesianGrid,
+  Cell,
+  Legend,
+  Pie,
+  PieChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -19,9 +23,14 @@ import { Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { cn } from "@/lib/utils";
-import { BRAND_BLUE } from "@/lib/constants";
+import { BRAND_BLUE, CHART_PALETTE } from "@/lib/constants";
 import { formatCurrency, formatDate } from "@/lib/format";
-import { approveReport, deleteReport, rejectReport } from "@/lib/data";
+import {
+  approveReport,
+  deleteReport,
+  getLedgerEntries,
+  rejectReport,
+} from "@/lib/data";
 import { toastQueuedNotifications } from "@/lib/notify";
 import type { ExpenseReport, ReportRoutingRow } from "@/lib/types";
 import {
@@ -72,6 +81,9 @@ export function KpiSection({ userId }: { userId: string }) {
       new Date(r.updatedAt).getFullYear() === currentYear
   );
   const paidTotal = paidYtd.reduce((sum, r) => sum + r.totalAmount, 0);
+  // The drill-down charts/table use a rolling 12-month window, so the body
+  // receives every paid report the user is involved in and windows internally.
+  const paidReports = reports.filter((r) => r.status === "PAID");
 
   // ---- mutations ----
   const onMutationError = (err: unknown) =>
@@ -153,14 +165,9 @@ export function KpiSection({ userId }: { userId: string }) {
         label="Total Paid YTD"
         value={formatCurrency(paidTotal)}
         loading={myReports.isLoading}
-        dialogClassName="sm:max-w-2xl"
+        dialogClassName="sm:max-w-3xl"
       >
-        <PaidYtdBody
-          loading={myReports.isLoading}
-          reports={paidYtd}
-          total={paidTotal}
-          year={currentYear}
-        />
+        <PaidYtdBody loading={myReports.isLoading} reports={paidReports} />
       </KpiCard>
     </section>
   );
@@ -388,63 +395,189 @@ function AwaitingBody({
   );
 }
 
-// ---------------- Body: Paid YTD (chart + table) ----------------
+// ---------------- Body: Paid YTD (charts + table) ----------------
+
+/** Year-month bucket key for a paid date (status → PAID timestamp). */
+const monthKey = (iso: string) => {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${d.getMonth()}`;
+};
+
+/** The trailing 12-month window ending with the current month. */
+function trailingTwelveMonths(now: Date) {
+  return Array.from({ length: 12 }, (_, i) => {
+    const d = new Date(now.getFullYear(), now.getMonth() - (11 - i), 1);
+    return {
+      key: `${d.getFullYear()}-${d.getMonth()}`,
+      label: `${MONTHS[d.getMonth()]} ${d.getFullYear()}`,
+    };
+  });
+}
+
+function ChartBox({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-2 rounded-xl border border-border p-3">
+      <p className="text-xs font-medium text-muted-foreground">{title}</p>
+      <div className="h-56 w-full">{children}</div>
+    </div>
+  );
+}
+
+function PaidYtdSkeleton() {
+  return (
+    <div className="flex flex-col gap-4">
+      <Skeleton className="h-4 w-64" />
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Skeleton className="h-64 w-full rounded-xl" />
+        <Skeleton className="h-64 w-full rounded-xl" />
+      </div>
+      <RowsSkeleton rows={3} />
+    </div>
+  );
+}
 
 function PaidYtdBody({
   loading,
   reports,
-  total,
-  year,
 }: {
   loading: boolean;
   reports: ExpenseReport[];
-  total: number;
-  year: number;
 }) {
-  const monthly = React.useMemo(() => {
-    const series = MONTHS.map((month) => ({ month, total: 0 }));
-    for (const r of reports) {
-      series[new Date(r.updatedAt).getMonth()].total += r.totalAmount;
-    }
-    return series;
-  }, [reports]);
+  const months = React.useMemo(() => trailingTwelveMonths(new Date()), []);
 
-  if (loading) return <RowsSkeleton rows={4} />;
-  if (reports.length === 0)
-    return <EmptyState message={`No payments in ${year}.`} />;
+  // Paid reports whose paid date (updatedAt) falls in the trailing window.
+  const windowReports = React.useMemo(() => {
+    const keys = new Set(months.map((m) => m.key));
+    return reports
+      .filter((r) => keys.has(monthKey(r.updatedAt)))
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  }, [reports, months]);
+
+  const windowReportIds = React.useMemo(
+    () => new Set(windowReports.map((r) => r.id)),
+    [windowReports]
+  );
+  const windowTotal = windowReports.reduce((s, r) => s + r.totalAmount, 0);
+
+  // Bar: paid amount by month across the window.
+  const monthly = React.useMemo(() => {
+    const totals = new Map(months.map((m) => [m.key, 0]));
+    for (const r of windowReports) {
+      const key = monthKey(r.updatedAt);
+      totals.set(key, (totals.get(key) ?? 0) + r.totalAmount);
+    }
+    return months.map((m) => ({ month: m.label, total: totals.get(m.key) ?? 0 }));
+  }, [months, windowReports]);
+
+  // Pie: paid amount by expense type, from the line-item ledger restricted to
+  // the same windowed reports (keeps the breakdown consistent with the bars).
+  const ledger = useQuery({
+    queryKey: ["ledger", { statuses: ["PAID"] }],
+    queryFn: () => getLedgerEntries({ statuses: ["PAID"] }),
+  });
+  const byType = React.useMemo(() => {
+    const totals = new Map<string, number>();
+    for (const e of ledger.data ?? []) {
+      if (!windowReportIds.has(e.reportId)) continue;
+      totals.set(
+        e.expenseTypeName,
+        (totals.get(e.expenseTypeName) ?? 0) + e.amount
+      );
+    }
+    return [...totals.entries()]
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value);
+  }, [ledger.data, windowReportIds]);
+  const pieTotal = byType.reduce((s, d) => s + d.value, 0);
+
+  if (loading) return <PaidYtdSkeleton />;
+  if (windowReports.length === 0)
+    return <EmptyState message="No payments in the last 12 months." />;
 
   return (
     <div className="flex flex-col gap-4">
       <p className="text-sm text-muted-foreground">
-        {formatCurrency(total)} paid across {reports.length}{" "}
-        {reports.length === 1 ? "report" : "reports"} in {year}.
+        {formatCurrency(windowTotal)} paid across {windowReports.length}{" "}
+        {windowReports.length === 1 ? "report" : "reports"} in the last 12 months.
       </p>
 
-      <div className="h-56 w-full">
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={monthly} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-            <XAxis
-              dataKey="month"
-              fontSize={11}
-              tickLine={false}
-              axisLine={false}
-            />
-            <YAxis
-              fontSize={11}
-              tickLine={false}
-              axisLine={false}
-              width={52}
-              tickFormatter={(v) => `$${Number(v).toLocaleString()}`}
-            />
-            <Tooltip
-              formatter={(value) => formatCurrency(Number(value))}
-              labelClassName="text-foreground"
-              contentStyle={{ fontSize: 12 }}
-            />
-            <Bar dataKey="total" fill={BRAND_BLUE} radius={[4, 4, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <ChartBox title="Paid by month">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart
+              data={monthly}
+              margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+              <XAxis
+                dataKey="month"
+                fontSize={10}
+                tickLine={false}
+                axisLine={false}
+                angle={-35}
+                textAnchor="end"
+                height={52}
+                interval={0}
+              />
+              <YAxis
+                fontSize={11}
+                tickLine={false}
+                axisLine={false}
+                width={52}
+                tickFormatter={(v) => `$${Number(v).toLocaleString()}`}
+              />
+              <Tooltip
+                formatter={(value) => formatCurrency(Number(value))}
+                labelClassName="text-foreground"
+                contentStyle={{ fontSize: 12 }}
+              />
+              <Bar dataKey="total" fill={BRAND_BLUE} radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </ChartBox>
+
+        <ChartBox title="By expense type">
+          {ledger.isLoading ? (
+            <Skeleton className="h-full w-full rounded-lg" />
+          ) : byType.length === 0 ? (
+            <EmptyState message="No expense breakdown." />
+          ) : (
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={byType}
+                  dataKey="value"
+                  nameKey="name"
+                  innerRadius={45}
+                  outerRadius={80}
+                  paddingAngle={2}
+                >
+                  {byType.map((_, i) => (
+                    <Cell
+                      key={i}
+                      fill={CHART_PALETTE[i % CHART_PALETTE.length]}
+                    />
+                  ))}
+                </Pie>
+                <Tooltip
+                  formatter={(value, name) => {
+                    const v = Number(value);
+                    const pct = pieTotal ? (v / pieTotal) * 100 : 0;
+                    return [`${formatCurrency(v)} (${pct.toFixed(1)}%)`, name];
+                  }}
+                  contentStyle={{ fontSize: 12 }}
+                />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+              </PieChart>
+            </ResponsiveContainer>
+          )}
+        </ChartBox>
       </div>
 
       <Table>
@@ -456,7 +589,7 @@ function PaidYtdBody({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {reports.map((r) => (
+          {windowReports.map((r) => (
             <TableRow key={r.id}>
               <TableCell className="font-medium">{r.reportName}</TableCell>
               <TableCell className="text-muted-foreground">
