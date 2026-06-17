@@ -37,7 +37,10 @@ export default function MyExpensesPage() {
     queryFn: () => getMyReports(user.id),
   });
 
-  const reports = reportsQuery.data ?? [];
+  const reports = React.useMemo(
+    () => reportsQuery.data ?? [],
+    [reportsQuery.data]
+  );
   const counts = React.useMemo(() => {
     const m = new Map<ReportStatus, number>();
     for (const r of reports) m.set(r.status, (m.get(r.status) ?? 0) + 1);

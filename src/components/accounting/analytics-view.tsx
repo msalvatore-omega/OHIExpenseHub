@@ -109,7 +109,7 @@ export function AnalyticsView() {
     queryFn: () => getLedgerEntries(filter),
   });
 
-  const entries = ledger.data ?? [];
+  const entries = React.useMemo(() => ledger.data ?? [], [ledger.data]);
   const agg = React.useMemo(() => aggregate(entries), [entries]);
 
   const toggle = <T,>(list: T[], v: T, set: (l: T[]) => void) =>
