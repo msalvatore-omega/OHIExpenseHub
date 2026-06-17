@@ -51,6 +51,9 @@ export function getDb(): Database {
   for (const u of db.users) {
     if (u.isActive === undefined) u.isActive = true;
   }
+  for (const r of db.receipts) {
+    if (r.uploadedById === undefined) r.uploadedById = r.userId;
+  }
   persist();
   return db;
 }
@@ -263,6 +266,23 @@ export function replaceLineItemsForReport(
 
 export function listReceipts(): Receipt[] {
   return getDb().receipts;
+}
+
+/**
+ * Whether currentUser may view/work in ownerId's gallery: true if it's their own
+ * gallery, or an active delegation from ownerId to currentUser exists.
+ */
+export function canAccessGallery(
+  currentUserId: string,
+  ownerId: string
+): boolean {
+  if (currentUserId === ownerId) return true;
+  return getDb().delegates.some(
+    (d) =>
+      d.delegateId === currentUserId &&
+      d.principalId === ownerId &&
+      d.isActive
+  );
 }
 
 export function findReceipt(id: string): Receipt | undefined {

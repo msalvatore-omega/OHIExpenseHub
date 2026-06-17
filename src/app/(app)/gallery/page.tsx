@@ -1,26 +1,24 @@
 "use client";
 
 // Receipt Gallery + capture pipeline.
-// Pipeline is fully client-side: object URL -> processReceipt() (mock OCR) ->
-// review modal -> persist via createReceipt(). Files are processed one at a
-// time so each opens its own review modal.
+// A delegate can switch between their own gallery and any principal they're an
+// active delegate for ("Viewing" selector). The selected owner scopes the grid,
+// tabs, date filter, uploads (userId = owner, uploadedById = you), and
+// Create-Report. Access is enforced server-side in the data layer, not by the
+// selector alone.
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { FilePlus2, Loader2, X } from "lucide-react";
+import { Eye, FilePlus2, Loader2, X } from "lucide-react";
 import { toast } from "sonner";
 
-import { formatDate } from "@/lib/format";
 import {
-  attachReceipt,
-  createDraft,
-  getExpenseTypes,
+  createReportFromReceipts,
+  getDelegatedPrincipals,
   getReceipts,
-  replaceLineItems,
 } from "@/lib/data";
 import { useSession } from "@/lib/auth/mock-session";
-import type { LineItemInput } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -32,29 +30,55 @@ import { useReceiptCapture } from "@/components/gallery/use-receipt-capture";
 
 type Filter = "all" | "unattached" | "attached";
 
+const SELECT_CLASS =
+  "h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
+
 export default function GalleryPage() {
   const { user } = useSession();
-  const userId = user.id;
+  const sessionUserId = user.id;
   const router = useRouter();
   const queryClient = useQueryClient();
 
-  const receiptsQuery = useQuery({
-    queryKey: ["receipts", userId],
-    queryFn: () => getReceipts({ userId }),
+  // Principals this user is an active delegate for (the selectable galleries).
+  const principalsQuery = useQuery({
+    queryKey: ["delegated-principals", sessionUserId],
+    queryFn: () => getDelegatedPrincipals(sessionUserId),
   });
-  const typesQuery = useQuery({
-    queryKey: ["expense-types"],
-    queryFn: getExpenseTypes,
+  const principals = principalsQuery.data ?? [];
+
+  // ---- selected gallery owner ----
+  const [ownerId, setOwnerId] = React.useState(sessionUserId);
+  const isOwn = ownerId === sessionUserId;
+  const ownerName =
+    principals.find((p) => p.id === ownerId)?.name ?? user.name;
+
+  const [selected, setSelected] = React.useState<Set<string>>(new Set());
+
+  const switchOwner = (id: string) => {
+    setOwnerId(id);
+    setSelected(new Set());
+  };
+
+  const receiptsQuery = useQuery({
+    queryKey: ["receipts", ownerId],
+    queryFn: () => getReceipts({ userId: ownerId }, sessionUserId),
   });
 
   const refresh = React.useCallback(
-    () => queryClient.invalidateQueries({ queryKey: ["receipts", userId] }),
-    [queryClient, userId]
+    () => queryClient.invalidateQueries({ queryKey: ["receipts", ownerId] }),
+    [queryClient, ownerId]
   );
 
-  // ---- capture pipeline (shared with the dashboard Photo button) ----
+  // ---- capture pipeline (owner = selected gallery, uploader = you) ----
   const { enqueue, review, saving, processingLabel, onSave, onDiscard } =
-    useReceiptCapture({ userId, onSaved: refresh });
+    useReceiptCapture({
+      userId: ownerId,
+      uploadedById: sessionUserId,
+      onSaved: refresh,
+      savedMessage: isOwn
+        ? "Receipt saved"
+        : `Receipt added to ${ownerName}'s gallery`,
+    });
 
   // ---- filters ----
   const [filter, setFilter] = React.useState<Filter>("all");
@@ -72,7 +96,6 @@ export default function GalleryPage() {
   });
 
   // ---- selection ----
-  const [selected, setSelected] = React.useState<Set<string>>(new Set());
   const toggle = (id: string) =>
     setSelected((prev) => {
       const next = new Set(prev);
@@ -82,54 +105,55 @@ export default function GalleryPage() {
     });
 
   const createReport = useMutation({
-    mutationFn: async () => {
-      const chosen = receipts.filter((r) => selected.has(r.id));
-      const types = typesQuery.data ?? (await getExpenseTypes());
-      const other =
-        types.find((t) => t.displayName === "Other Expenses") ??
-        types.find((t) => !t.isMileage);
-      const today = new Date().toISOString().slice(0, 10);
-      const dates = chosen
-        .map((r) => r.merchantDate)
-        .filter((d): d is string => Boolean(d))
-        .sort();
-      const draft = await createDraft({
-        reportName: `Receipts — ${formatDate(today)}`,
-        submitterId: userId,
-        paidToId: userId,
-        periodFrom: dates[0] ?? today,
-        periodTo: dates[dates.length - 1] ?? today,
-      });
-      const items: LineItemInput[] = chosen.map((r) => ({
-        expenseDate: r.merchantDate ?? today,
-        purposeOfTrip: "",
-        description: r.merchantName ?? "Receipt",
-        city: "",
-        state: "",
-        country: "",
-        expenseTypeId: other?.id ?? "",
-        amount: r.totalAmount ?? 0,
-        receiptId: r.id,
-      }));
-      await replaceLineItems(draft.id, items);
-      await Promise.all(chosen.map((r) => attachReceipt(draft.id, r.id)));
-      return draft.id;
-    },
+    mutationFn: () =>
+      createReportFromReceipts({
+        requesterId: sessionUserId,
+        ownerId,
+        receiptIds: [...selected],
+      }),
     onSuccess: (id) => {
       refresh();
       router.push(`/reports/${id}/edit`);
     },
-    onError: () => toast.error("Could not create report"),
+    onError: (e) =>
+      toast.error(e instanceof Error ? e.message : "Could not create report"),
   });
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-6 py-8">
-      <header>
-        <h1>Receipt Gallery</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Capture receipts, review the scanned details, and build reports.
-        </p>
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1>Receipt Gallery</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Capture receipts, review the scanned details, and build reports.
+          </p>
+        </div>
+
+        {principals.length > 0 && (
+          <label className="flex items-center gap-2 text-sm">
+            <span className="text-muted-foreground">Viewing</span>
+            <select
+              className={SELECT_CLASS}
+              value={ownerId}
+              onChange={(e) => switchOwner(e.target.value)}
+            >
+              <option value={sessionUserId}>My Gallery</option>
+              {principals.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}&apos;s Gallery
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
       </header>
+
+      {!isOwn && (
+        <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm">
+          <Eye className="size-4 text-muted-foreground" />
+          Viewing <span className="font-medium">{ownerName}</span>&apos;s receipts
+        </div>
+      )}
 
       <UploadZone onFiles={enqueue} processingLabel={processingLabel} />
 
@@ -182,6 +206,10 @@ export default function GalleryPage() {
             <Skeleton key={i} className="h-56 w-full rounded-xl" />
           ))}
         </div>
+      ) : receiptsQuery.isError ? (
+        <div className="flex h-48 items-center justify-center rounded-xl border border-dashed border-destructive/40 text-sm text-destructive">
+          You do not have access to this gallery.
+        </div>
       ) : filtered.length === 0 ? (
         <div className="flex h-48 items-center justify-center rounded-xl border border-dashed border-border text-sm text-muted-foreground">
           {receipts.length === 0
@@ -226,7 +254,9 @@ export default function GalleryPage() {
               ) : (
                 <FilePlus2 className="size-4" />
               )}
-              Create New Report with Selected
+              {isOwn
+                ? "Create New Report with Selected"
+                : `Create Report for ${ownerName}`}
             </Button>
           </div>
         </div>

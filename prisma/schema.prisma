@@ -59,6 +59,28 @@ model User {
   submittedReports ExpenseReport[]   @relation("ReportSubmitter")
   paidReports      ExpenseReport[]   @relation("ReportPayee")
   reportChanges    ReportChangeLog[] @relation("ChangeAuthor")
+  ownedReceipts    Receipt[]         @relation("ReceiptOwner")
+  uploadedReceipts Receipt[]         @relation("ReceiptUploader")
+}
+
+model Receipt {
+  id           String    @id @default(cuid())
+  // The gallery owner this receipt belongs to.
+  userId       String
+  owner        User      @relation("ReceiptOwner", fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  // Who actually uploaded it: a delegate, or the owner for self-uploads.
+  uploadedById String
+  uploadedBy   User      @relation("ReceiptUploader", fields: [uploadedById], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  imageUrl     String    @db.NVarChar(Max)
+  merchantName String?   @db.NVarChar(200)
+  merchantDate DateTime?
+  totalAmount  Decimal?  @db.Decimal(12, 2)
+  taxAmount    Decimal?  @db.Decimal(12, 2)
+  isAttached   Boolean   @default(false)
+  createdAt    DateTime  @default(now())
+
+  @@index([userId])
+  @@index([uploadedById])
 }
 
 model ExpenseReport {

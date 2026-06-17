@@ -96,7 +96,10 @@ export interface ExpenseType {
 
 export interface Receipt {
   id: string;
+  /** The gallery owner this receipt belongs to. */
   userId: string;
+  /** Who actually uploaded it (a delegate, or the owner for self-uploads). */
+  uploadedById: string;
   imageUrl: string;
   merchantName?: string;
   merchantDate?: string;
@@ -198,7 +201,10 @@ export interface CreateDraftInput {
 
 /** Input for persisting a newly captured receipt. */
 export interface CreateReceiptInput {
+  /** Gallery owner the receipt belongs to. */
   userId: string;
+  /** Uploader (session user). Defaults to userId for self-uploads. */
+  uploadedById?: string;
   imageUrl: string;
   merchantName?: string;
   merchantDate?: string;

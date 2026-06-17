@@ -6,6 +6,7 @@
 // bodies (Prisma queries, REST/GraphQL fetches) and leave the signatures alone.
 
 import {
+  canAccessGallery,
   findReceipt,
   findReport,
   insertApprovalHistory,
@@ -39,6 +40,7 @@ import {
   userHasRelations,
 } from "@/lib/data/store";
 import { MILEAGE_RATE } from "@/lib/constants";
+import { formatDate } from "@/lib/format";
 import type {
   AccountingReportRow,
   AnalyticsFilter,
@@ -68,6 +70,18 @@ import type {
   ReportStatus,
   User,
 } from "@/lib/types";
+
+/**
+ * Authorization failure. In the eventual API this maps to an HTTP 403; here the
+ * mock "server" throws it so the UI can surface a forbidden state.
+ */
+export class ForbiddenError extends Error {
+  readonly status = 403;
+  constructor(message = "Forbidden") {
+    super(message);
+    this.name = "ForbiddenError";
+  }
+}
 
 /** Simulate a 200–500ms round-trip. */
 function delay(min = 200, max = 500): Promise<void> {
@@ -777,8 +791,15 @@ export async function getRoutingForUser(
 
 // ---- Receipts ----
 
-export async function getReceipts(filter?: ReceiptFilter): Promise<Receipt[]> {
+export async function getReceipts(
+  filter?: ReceiptFilter,
+  requesterId?: string
+): Promise<Receipt[]> {
   await delay();
+  // Authorize reading another owner's gallery (server-side check).
+  if (requesterId && filter?.userId && !canAccessGallery(requesterId, filter.userId)) {
+    throw new ForbiddenError("You do not have access to this gallery.");
+  }
   let receipts = [...listReceipts()];
   if (filter?.userId)
     receipts = receipts.filter((r) => r.userId === filter.userId);
@@ -805,9 +826,15 @@ export async function createReceipt(
   input: CreateReceiptInput
 ): Promise<Receipt> {
   await delay();
+  const uploadedById = input.uploadedById ?? input.userId;
+  // Authorize uploading into the target gallery (server-side check).
+  if (!canAccessGallery(uploadedById, input.userId)) {
+    throw new ForbiddenError("You do not have access to this gallery.");
+  }
   return insertReceipt({
     id: newId("receipt"),
     userId: input.userId,
+    uploadedById,
     imageUrl: input.imageUrl,
     merchantName: input.merchantName,
     merchantDate: input.merchantDate,
@@ -817,6 +844,61 @@ export async function createReceipt(
     isAttached: false,
     createdAt: nowIso(),
   });
+}
+
+/**
+ * Build a draft report from selected gallery receipts. Enforces gallery access;
+ * when the owner isn't the requester, the report is created on the owner's
+ * behalf (onBehalfOfId + paidToId = owner, submitter = requester).
+ */
+export async function createReportFromReceipts(input: {
+  requesterId: string;
+  ownerId: string;
+  receiptIds: string[];
+}): Promise<string> {
+  if (!canAccessGallery(input.requesterId, input.ownerId)) {
+    throw new ForbiddenError("You do not have access to this gallery.");
+  }
+  const chosen = listReceipts().filter(
+    (r) => input.receiptIds.includes(r.id) && r.userId === input.ownerId
+  );
+  if (chosen.length === 0) throw new Error("No receipts selected.");
+
+  const types = listExpenseTypes();
+  const other =
+    types.find((t) => t.displayName === "Other Expenses") ??
+    types.find((t) => !t.isMileage);
+  const today = nowIso().slice(0, 10);
+  const dates = chosen
+    .map((r) => r.merchantDate)
+    .filter((d): d is string => Boolean(d))
+    .sort();
+  const onBehalfOfId =
+    input.ownerId !== input.requesterId ? input.ownerId : undefined;
+
+  const draft = await createDraft({
+    reportName: `Receipts — ${formatDate(today)}`,
+    submitterId: input.requesterId,
+    onBehalfOfId,
+    paidToId: input.ownerId,
+    periodFrom: dates[0] ?? today,
+    periodTo: dates[dates.length - 1] ?? today,
+  });
+
+  const items: LineItemInput[] = chosen.map((r) => ({
+    expenseDate: r.merchantDate ?? today,
+    purposeOfTrip: "",
+    description: r.merchantName ?? "Receipt",
+    city: "",
+    state: "",
+    country: "",
+    expenseTypeId: other?.id ?? "",
+    amount: r.totalAmount ?? 0,
+    receiptId: r.id,
+  }));
+  await replaceLineItems(draft.id, items);
+  await Promise.all(chosen.map((r) => attachReceipt(draft.id, r.id)));
+  return draft.id;
 }
 
 // ---- Reference data ----

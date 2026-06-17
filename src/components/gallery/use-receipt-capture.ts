@@ -32,10 +32,14 @@ export interface ReceiptCapture {
 
 export function useReceiptCapture({
   userId,
+  uploadedById,
   onSaved,
   savedMessage = "Receipt saved",
 }: {
+  /** Gallery owner the receipt is saved to. */
   userId: string;
+  /** Uploader (session user). Defaults to userId for self-uploads. */
+  uploadedById?: string;
   /** Called after a receipt is persisted (e.g. to refresh the gallery query). */
   onSaved?: () => void;
   /** Success-toast copy shown when a reviewed receipt is saved. */
@@ -71,7 +75,7 @@ export function useReceiptCapture({
         setProcessing(null);
         if (err instanceof OcrTimeoutError) {
           try {
-            await createReceipt({ userId, imageUrl: previewUrl });
+            await createReceipt({ userId, uploadedById, imageUrl: previewUrl });
             onSaved?.();
             toast.warning(
               "OCR timed out — receipt saved, please fill in details manually."
@@ -88,7 +92,7 @@ export function useReceiptCapture({
         pumpRef.current();
       }
     })();
-  }, [onSaved, userId]);
+  }, [onSaved, userId, uploadedById]);
 
   // Keep the ref pointed at the current pump for the async worker above.
   React.useEffect(() => {
@@ -110,7 +114,12 @@ export function useReceiptCapture({
       if (!review) return;
       setSaving(true);
       try {
-        await createReceipt({ userId, imageUrl: review.previewUrl, ...data });
+        await createReceipt({
+          userId,
+          uploadedById,
+          imageUrl: review.previewUrl,
+          ...data,
+        });
         onSaved?.();
         toast.success(savedMessage);
         setReview(null);
@@ -122,7 +131,7 @@ export function useReceiptCapture({
         pump();
       }
     },
-    [review, userId, onSaved, savedMessage, pump]
+    [review, userId, uploadedById, onSaved, savedMessage, pump]
   );
 
   const onDiscard = React.useCallback(() => {

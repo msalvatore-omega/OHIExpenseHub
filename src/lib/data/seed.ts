@@ -148,7 +148,7 @@ function buildExpenseTypes(): ExpenseType[] {
   ];
 }
 
-function buildReceipts(): Receipt[] {
+function buildReceipts(): Omit<Receipt, "uploadedById">[] {
   return [
     {
       id: "receipt-marriott",
@@ -786,7 +786,8 @@ export function createSeedData(): Database {
     expenseTypes: buildExpenseTypes(),
     reports,
     lineItems,
-    receipts: buildReceipts(),
+    // Seed receipts are self-uploads: uploadedById defaults to the owner.
+    receipts: buildReceipts().map((r) => ({ ...r, uploadedById: r.userId })),
     approvalHistory,
     changeLogs: buildChangeLogs(),
     outbox: buildOutbox(),
