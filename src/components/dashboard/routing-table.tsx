@@ -21,7 +21,9 @@ export function RoutingTable({ userId }: { userId: string }) {
   const rows = routing.data ?? [];
 
   return (
-    <section className="flex flex-col gap-3">
+    // Desktop only — on mobile the routing table is hidden; users work from the
+    // Home action buttons instead.
+    <section className="hidden flex-col gap-3 md:flex">
       <h2 className="text-sm font-medium text-muted-foreground">
         Approval routing
       </h2>

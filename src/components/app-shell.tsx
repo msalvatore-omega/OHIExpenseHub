@@ -11,7 +11,6 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   ChevronDown,
   LogOut,
-  MoreHorizontal,
   PanelLeft,
   PanelLeftClose,
 } from "lucide-react";
@@ -35,7 +34,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 const SIDEBAR_STORAGE_KEY = "ohi-sidebar-collapsed";
-const MAX_BOTTOM_TABS = 5;
 
 function initials(name: string): string {
   return name
@@ -121,11 +119,17 @@ function DesktopSidebar({ items }: { items: NavItem[] }) {
           collapsed && "justify-center px-0"
         )}
       >
-        {!collapsed && <BrandMark />}
         {!collapsed && (
-          <span className="truncate text-sm font-semibold tracking-tight text-sidebar-foreground">
-            {APP_NAME}
-          </span>
+          <Link
+            href="/dashboard"
+            aria-label={`${APP_NAME} — go to Home`}
+            className="-mx-1 flex min-w-0 cursor-pointer items-center gap-2 rounded-md px-1 py-1 transition-colors hover:bg-sidebar-accent/60"
+          >
+            <BrandMark />
+            <span className="truncate text-sm font-semibold tracking-tight text-sidebar-foreground">
+              {APP_NAME}
+            </span>
+          </Link>
         )}
         <Button
           variant="ghost"
@@ -368,54 +372,14 @@ function MobileTopBar() {
 function MobileBottomBar({ items }: { items: NavItem[] }) {
   const isActive = useActive();
 
-  const hasOverflow = items.length > MAX_BOTTOM_TABS;
-  const primary = hasOverflow ? items.slice(0, MAX_BOTTOM_TABS - 1) : items;
-  const overflow = hasOverflow ? items.slice(MAX_BOTTOM_TABS - 1) : [];
+  // Mobile: the bottom bar carries only Home. Every other destination is
+  // reached from the Home dashboard's action buttons.
+  const home = items.find((item) => item.href === "/dashboard");
+  if (!home) return null;
 
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 flex items-stretch border-t border-border bg-background/95 backdrop-blur md:hidden print:hidden">
-      {primary.map((item) =>
-        item.children?.length ? (
-          <BottomGroupTab key={item.href} item={item} isActive={isActive} />
-        ) : (
-          <BottomTab key={item.href} item={item} active={isActive(item.href)} />
-        )
-      )}
-      {hasOverflow && (
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={
-              <button
-                type="button"
-                className="flex flex-1 flex-col items-center justify-center gap-1 py-2 text-muted-foreground"
-              />
-            }
-          >
-            <MoreHorizontal className="size-5" />
-            <span className="text-[10px] font-medium">More</span>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent side="top" align="end" className="w-48">
-            {overflow.map((item) =>
-              item.children?.length ? (
-                <React.Fragment key={item.href}>
-                  <DropdownMenuLabel>{item.label}</DropdownMenuLabel>
-                  {item.children.map((c) => (
-                    <DropdownMenuItem key={c.href} render={<Link href={c.href} />}>
-                      <c.icon className="size-4" />
-                      {c.label}
-                    </DropdownMenuItem>
-                  ))}
-                </React.Fragment>
-              ) : (
-                <DropdownMenuItem key={item.href} render={<Link href={item.href} />}>
-                  <item.icon className="size-4" />
-                  {item.label}
-                </DropdownMenuItem>
-              )
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      )}
+      <BottomTab item={home} active={isActive(home.href)} />
     </nav>
   );
 }
@@ -435,40 +399,3 @@ function BottomTab({ item, active }: { item: NavItem; active: boolean }) {
   );
 }
 
-// A grouped bottom tab: opens a popover with its child links above the bar.
-function BottomGroupTab({
-  item,
-  isActive,
-}: {
-  item: NavItem;
-  isActive: (href: string) => boolean;
-}) {
-  const active = isActive(item.href);
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        render={
-          <button
-            type="button"
-            className={cn(
-              "flex flex-1 flex-col items-center justify-center gap-1 py-2 text-[10px] font-medium transition-colors",
-              active ? "text-foreground" : "text-muted-foreground"
-            )}
-          />
-        }
-      >
-        <item.icon className={cn("size-5", active && "text-foreground")} />
-        <span className="max-w-full truncate px-1">{item.label}</span>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent side="top" align="center" className="w-48">
-        <DropdownMenuLabel>{item.label}</DropdownMenuLabel>
-        {(item.children ?? []).map((c) => (
-          <DropdownMenuItem key={c.href} render={<Link href={c.href} />}>
-            <c.icon className="size-4" />
-            {c.label}
-          </DropdownMenuItem>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}

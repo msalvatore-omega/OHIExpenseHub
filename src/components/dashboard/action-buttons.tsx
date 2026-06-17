@@ -1,7 +1,9 @@
 "use client";
 
-// Four primary actions. New Expense creates a draft then routes to its editor;
-// My Expenses and Approvals open slide-over Sheets; Receipt Gallery navigates.
+// Primary dashboard actions. New Expense creates a draft then routes to its
+// editor; Photo quick-captures a receipt into the gallery; My Expenses and
+// Approvals open slide-over Sheets; Receipt Gallery navigates. On mobile the
+// Approvals tile is hidden (desktop keeps all five).
 
 import { useRouter } from "next/navigation";
 import { useMutation } from "@tanstack/react-query";
@@ -24,6 +26,7 @@ import {
   useMyReports,
 } from "@/components/dashboard/use-dashboard-data";
 import { StatusPill } from "@/components/status-pill";
+import { PhotoCaptureButton } from "@/components/dashboard/photo-capture-button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Sheet,
@@ -61,7 +64,7 @@ export function ActionButtons({ userId }: { userId: string }) {
   });
 
   return (
-    <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
+    <section className="grid grid-cols-2 gap-3 md:grid-cols-5">
       {/* New Expense (blue) */}
       <button
         type="button"
@@ -76,6 +79,12 @@ export function ActionButtons({ userId }: { userId: string }) {
         )}
         New Expense
       </button>
+
+      {/* Photo — quick receipt capture (teal) */}
+      <PhotoCaptureButton
+        userId={userId}
+        className={cn(TILE, "bg-teal-600 hover:bg-teal-600")}
+      />
 
       {/* My Expenses (indigo) */}
       <Sheet>
@@ -99,13 +108,13 @@ export function ActionButtons({ userId }: { userId: string }) {
         </SheetContent>
       </Sheet>
 
-      {/* Approvals (amber) */}
+      {/* Approvals (amber) — desktop only */}
       <Sheet>
         <SheetTrigger
           render={
             <button
               type="button"
-              className={cn(TILE, "bg-amber-500 hover:bg-amber-500")}
+              className={cn(TILE, "hidden bg-amber-500 hover:bg-amber-500 md:flex")}
             />
           }
         >

@@ -12,11 +12,9 @@ import { FilePlus2, Loader2, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { formatDate } from "@/lib/format";
-import { OcrTimeoutError, processReceipt } from "@/lib/data/ocr";
 import {
   attachReceipt,
   createDraft,
-  createReceipt,
   getExpenseTypes,
   getReceipts,
   replaceLineItems,
@@ -29,10 +27,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { UploadZone } from "@/components/gallery/upload-zone";
 import { ReceiptCard } from "@/components/gallery/receipt-card";
-import {
-  OcrReviewModal,
-  type ReviewItem,
-} from "@/components/gallery/ocr-review-modal";
+import { OcrReviewModal } from "@/components/gallery/ocr-review-modal";
+import { useReceiptCapture } from "@/components/gallery/use-receipt-capture";
 
 type Filter = "all" | "unattached" | "attached";
 
@@ -56,87 +52,9 @@ export default function GalleryPage() {
     [queryClient, userId]
   );
 
-  // ---- capture pipeline (sequential queue) ----
-  const queueRef = React.useRef<File[]>([]);
-  const busyRef = React.useRef(false);
-  const [processing, setProcessing] = React.useState<string | null>(null);
-  const [queuedCount, setQueuedCount] = React.useState(0);
-  const [review, setReview] = React.useState<ReviewItem | null>(null);
-  const [saving, setSaving] = React.useState(false);
-
-  const pump = React.useCallback(() => {
-    if (busyRef.current) return;
-    const file = queueRef.current.shift();
-    setQueuedCount(queueRef.current.length);
-    if (!file) return;
-    busyRef.current = true;
-
-    void (async () => {
-      const previewUrl = URL.createObjectURL(file);
-      const isPdf = file.type === "application/pdf";
-      setProcessing(file.name);
-      try {
-        const ocr = await processReceipt(file);
-        setProcessing(null);
-        setReview({ file, previewUrl, isPdf, ocr });
-        // busy stays true until the user saves/discards in the modal.
-      } catch (err) {
-        setProcessing(null);
-        if (err instanceof OcrTimeoutError) {
-          try {
-            await createReceipt({ userId, imageUrl: previewUrl });
-            refresh();
-            toast.warning(
-              "OCR timed out — receipt saved, please fill in details manually."
-            );
-          } catch {
-            URL.revokeObjectURL(previewUrl);
-            toast.error("Could not save receipt");
-          }
-        } else {
-          URL.revokeObjectURL(previewUrl);
-          toast.error("Could not process receipt");
-        }
-        busyRef.current = false;
-        pump();
-      }
-    })();
-  }, [refresh, userId]);
-
-  const enqueue = (files: File[]) => {
-    queueRef.current.push(...files);
-    setQueuedCount(queueRef.current.length);
-    pump();
-  };
-
-  const onSave = async (data: {
-    merchantName?: string;
-    merchantDate?: string;
-    totalAmount?: number;
-    taxAmount?: number;
-  }) => {
-    if (!review) return;
-    setSaving(true);
-    try {
-      await createReceipt({ userId, imageUrl: review.previewUrl, ...data });
-      refresh();
-      toast.success("Receipt saved");
-      setReview(null);
-    } catch {
-      toast.error("Could not save receipt");
-    } finally {
-      setSaving(false);
-      busyRef.current = false;
-      pump();
-    }
-  };
-
-  const onDiscard = () => {
-    if (review) URL.revokeObjectURL(review.previewUrl);
-    setReview(null);
-    busyRef.current = false;
-    pump();
-  };
+  // ---- capture pipeline (shared with the dashboard Photo button) ----
+  const { enqueue, review, saving, processingLabel, onSave, onDiscard } =
+    useReceiptCapture({ userId, onSaved: refresh });
 
   // ---- filters ----
   const [filter, setFilter] = React.useState<Filter>("all");
@@ -203,12 +121,6 @@ export default function GalleryPage() {
     },
     onError: () => toast.error("Could not create report"),
   });
-
-  const processingLabel = processing
-    ? `Processing receipt: ${processing}${
-        queuedCount > 0 ? ` (+${queuedCount} queued)` : ""
-      }…`
-    : null;
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-6 py-8">
