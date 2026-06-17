@@ -3,9 +3,11 @@
 
 import type { LucideIcon } from "lucide-react";
 import {
+  BarChart3,
   Calculator,
   ClipboardCheck,
   FilePlus2,
+  FileText,
   Home,
   Images,
   Inbox,
@@ -15,12 +17,21 @@ import {
 
 import type { UserRole } from "@/lib/types";
 
+/** A leaf link nested under an expandable nav group. */
+export interface NavChild {
+  label: string;
+  href: string;
+  icon: LucideIcon;
+}
+
 export interface NavItem {
   label: string;
   href: string;
   icon: LucideIcon;
   /** When set, the item is only visible to these roles. Undefined = everyone. */
   roles?: UserRole[];
+  /** When present, the item is an expandable group rather than a direct link. */
+  children?: NavChild[];
 }
 
 export const NAV_ITEMS: NavItem[] = [
@@ -36,10 +47,14 @@ export const NAV_ITEMS: NavItem[] = [
     roles: ["APPROVER", "ADMIN", "ACCOUNTING"],
   },
   {
-    label: "Accounting",
+    label: "Reports & Analytics",
     href: "/accounting",
     icon: Calculator,
     roles: ["ACCOUNTING", "ADMIN"],
+    children: [
+      { label: "Analytics", href: "/accounting/analytics", icon: BarChart3 },
+      { label: "Reports", href: "/accounting/reports", icon: FileText },
+    ],
   },
   { label: "Admin", href: "/admin", icon: Shield, roles: ["ADMIN"] },
 ];

@@ -8,7 +8,13 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LogOut, MoreHorizontal, PanelLeft, PanelLeftClose } from "lucide-react";
+import {
+  ChevronDown,
+  LogOut,
+  MoreHorizontal,
+  PanelLeft,
+  PanelLeftClose,
+} from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { APP_NAME } from "@/lib/constants";
@@ -135,9 +141,15 @@ function DesktopSidebar({ items }: { items: NavItem[] }) {
 
       {/* Nav */}
       <nav className="flex flex-1 flex-col gap-1 overflow-y-auto p-2">
-        {items.map((item) => {
-          const active = isActive(item.href);
-          return (
+        {items.map((item) =>
+          item.children?.length ? (
+            <SidebarGroup
+              key={item.href}
+              item={item}
+              collapsed={collapsed}
+              isActive={isActive}
+            />
+          ) : (
             <Link
               key={item.href}
               href={item.href}
@@ -145,7 +157,7 @@ function DesktopSidebar({ items }: { items: NavItem[] }) {
               className={cn(
                 "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
                 collapsed && "justify-center px-0",
-                active
+                isActive(item.href)
                   ? "bg-sidebar-accent font-semibold text-sidebar-accent-foreground"
                   : "text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
               )}
@@ -153,8 +165,8 @@ function DesktopSidebar({ items }: { items: NavItem[] }) {
               <item.icon className="size-4 shrink-0" />
               {!collapsed && <span className="truncate">{item.label}</span>}
             </Link>
-          );
-        })}
+          )
+        )}
       </nav>
 
       {/* Footer */}
@@ -195,6 +207,111 @@ function DesktopSidebar({ items }: { items: NavItem[] }) {
         </Button>
       </div>
     </aside>
+  );
+}
+
+// ---------------- Sidebar expandable group ----------------
+
+function SidebarGroup({
+  item,
+  collapsed,
+  isActive,
+}: {
+  item: NavItem;
+  collapsed: boolean;
+  isActive: (href: string) => boolean;
+}) {
+  const children = item.children ?? [];
+  const childActive = children.some((c) => isActive(c.href));
+  const [open, setOpen] = React.useState(childActive);
+
+  // Auto-expand the group whenever one of its child routes becomes active.
+  React.useEffect(() => {
+    if (childActive) setOpen(true);
+  }, [childActive]);
+
+  // Collapsed (icon-only) sidebar: reveal children in a hover/focus flyout.
+  if (collapsed) {
+    return (
+      <div className="group/sb relative">
+        <div
+          title={item.label}
+          className={cn(
+            "flex items-center justify-center rounded-md py-2 text-sm font-medium transition-colors",
+            childActive
+              ? "bg-sidebar-accent font-semibold text-sidebar-accent-foreground"
+              : "text-sidebar-foreground/70 group-hover/sb:bg-sidebar-accent/60 group-hover/sb:text-sidebar-foreground"
+          )}
+        >
+          <item.icon className="size-4 shrink-0" />
+        </div>
+        <div className="invisible absolute top-0 left-full z-50 ml-2 w-48 rounded-lg border border-sidebar-border bg-sidebar p-1 opacity-0 shadow-md transition-opacity group-hover/sb:visible group-hover/sb:opacity-100 group-focus-within/sb:visible group-focus-within/sb:opacity-100">
+          <p className="px-2 py-1.5 text-xs font-medium text-sidebar-foreground/60">
+            {item.label}
+          </p>
+          {children.map((c) => (
+            <Link
+              key={c.href}
+              href={c.href}
+              className={cn(
+                "flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors",
+                isActive(c.href)
+                  ? "bg-sidebar-accent font-semibold text-sidebar-accent-foreground"
+                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
+              )}
+            >
+              <c.icon className="size-4 shrink-0" />
+              <span className="truncate">{c.label}</span>
+            </Link>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // Expanded sidebar: accordion with the children stacked below the header.
+  return (
+    <div className="flex flex-col">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className={cn(
+          "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+          childActive
+            ? "text-sidebar-foreground"
+            : "text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
+        )}
+      >
+        <item.icon className="size-4 shrink-0" />
+        <span className="truncate">{item.label}</span>
+        <ChevronDown
+          className={cn(
+            "ml-auto size-4 shrink-0 transition-transform",
+            open && "rotate-180"
+          )}
+        />
+      </button>
+      {open && (
+        <div className="mt-1 flex flex-col gap-1 pl-4">
+          {children.map((c) => (
+            <Link
+              key={c.href}
+              href={c.href}
+              className={cn(
+                "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
+                isActive(c.href)
+                  ? "bg-sidebar-accent font-semibold text-sidebar-accent-foreground"
+                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
+              )}
+            >
+              <c.icon className="size-4 shrink-0" />
+              <span className="truncate">{c.label}</span>
+            </Link>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -252,9 +369,13 @@ function MobileBottomBar({ items }: { items: NavItem[] }) {
 
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 flex items-stretch border-t border-border bg-background/95 backdrop-blur md:hidden print:hidden">
-      {primary.map((item) => (
-        <BottomTab key={item.href} item={item} active={isActive(item.href)} />
-      ))}
+      {primary.map((item) =>
+        item.children?.length ? (
+          <BottomGroupTab key={item.href} item={item} isActive={isActive} />
+        ) : (
+          <BottomTab key={item.href} item={item} active={isActive(item.href)} />
+        )
+      )}
       {hasOverflow && (
         <DropdownMenu>
           <DropdownMenuTrigger
@@ -269,12 +390,24 @@ function MobileBottomBar({ items }: { items: NavItem[] }) {
             <span className="text-[10px] font-medium">More</span>
           </DropdownMenuTrigger>
           <DropdownMenuContent side="top" align="end" className="w-48">
-            {overflow.map((item) => (
-              <DropdownMenuItem key={item.href} render={<Link href={item.href} />}>
-                <item.icon className="size-4" />
-                {item.label}
-              </DropdownMenuItem>
-            ))}
+            {overflow.map((item) =>
+              item.children?.length ? (
+                <React.Fragment key={item.href}>
+                  <DropdownMenuLabel>{item.label}</DropdownMenuLabel>
+                  {item.children.map((c) => (
+                    <DropdownMenuItem key={c.href} render={<Link href={c.href} />}>
+                      <c.icon className="size-4" />
+                      {c.label}
+                    </DropdownMenuItem>
+                  ))}
+                </React.Fragment>
+              ) : (
+                <DropdownMenuItem key={item.href} render={<Link href={item.href} />}>
+                  <item.icon className="size-4" />
+                  {item.label}
+                </DropdownMenuItem>
+              )
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
       )}
@@ -294,5 +427,43 @@ function BottomTab({ item, active }: { item: NavItem; active: boolean }) {
       <item.icon className={cn("size-5", active && "text-foreground")} />
       <span className="max-w-full truncate px-1">{item.label}</span>
     </Link>
+  );
+}
+
+// A grouped bottom tab: opens a popover with its child links above the bar.
+function BottomGroupTab({
+  item,
+  isActive,
+}: {
+  item: NavItem;
+  isActive: (href: string) => boolean;
+}) {
+  const active = isActive(item.href);
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <button
+            type="button"
+            className={cn(
+              "flex flex-1 flex-col items-center justify-center gap-1 py-2 text-[10px] font-medium transition-colors",
+              active ? "text-foreground" : "text-muted-foreground"
+            )}
+          />
+        }
+      >
+        <item.icon className={cn("size-5", active && "text-foreground")} />
+        <span className="max-w-full truncate px-1">{item.label}</span>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent side="top" align="center" className="w-48">
+        <DropdownMenuLabel>{item.label}</DropdownMenuLabel>
+        {(item.children ?? []).map((c) => (
+          <DropdownMenuItem key={c.href} render={<Link href={c.href} />}>
+            <c.icon className="size-4" />
+            {c.label}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
