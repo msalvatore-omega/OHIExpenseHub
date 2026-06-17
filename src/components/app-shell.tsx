@@ -20,6 +20,7 @@ import { APP_NAME } from "@/lib/constants";
 import { useSession } from "@/lib/auth/mock-session";
 import { visibleNavItems, type NavItem } from "@/lib/nav";
 import { BrandLogo } from "@/components/brand-logo";
+import { Breadcrumbs } from "@/components/breadcrumbs";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -66,7 +67,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <DesktopSidebar items={items} />
       <div className="flex min-w-0 flex-1 flex-col">
         <MobileTopBar />
-        <main className="flex-1 pb-20 md:pb-0">{children}</main>
+        <main className="flex-1 pb-20 md:pb-0">
+          <div className="mx-auto w-full max-w-6xl px-6 pt-6 print:hidden">
+            <Breadcrumbs />
+          </div>
+          {children}
+        </main>
         <MobileBottomBar items={items} />
       </div>
     </div>
