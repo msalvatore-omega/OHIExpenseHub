@@ -13,6 +13,7 @@ import type {
   ExpenseType,
   MockEmail,
   Receipt,
+  ReportChangeLog,
   User,
 } from "@/lib/types";
 
@@ -45,6 +46,8 @@ function persist(): void {
 export function getDb(): Database {
   if (db) return db;
   db = loadFromStorage() ?? createSeedData();
+  // Forward-compat: older persisted snapshots predate some collections.
+  if (!db.changeLogs) db.changeLogs = [];
   persist();
   return db;
 }
@@ -157,7 +160,7 @@ export function patchReport(
   return report;
 }
 
-/** Delete a report and cascade to its line items and approval history. */
+/** Delete a report and cascade to its line items, history, and change log. */
 export function removeReport(id: string): boolean {
   const data = getDb();
   const exists = data.reports.some((r) => r.id === id);
@@ -165,6 +168,7 @@ export function removeReport(id: string): boolean {
   data.reports = data.reports.filter((r) => r.id !== id);
   data.lineItems = data.lineItems.filter((li) => li.reportId !== id);
   data.approvalHistory = data.approvalHistory.filter((h) => h.reportId !== id);
+  data.changeLogs = data.changeLogs.filter((c) => c.reportId !== id);
   persist();
   return true;
 }
@@ -256,6 +260,19 @@ export function listApprovalHistory(reportId?: string): ApprovalHistory[] {
 
 export function insertApprovalHistory(entry: ApprovalHistory): ApprovalHistory {
   getDb().approvalHistory.push(entry);
+  persist();
+  return entry;
+}
+
+// ---- Report change log (audit trail) ----
+
+export function listChangeLogs(reportId?: string): ReportChangeLog[] {
+  const logs = getDb().changeLogs;
+  return reportId ? logs.filter((c) => c.reportId === reportId) : logs;
+}
+
+export function insertChangeLog(entry: ReportChangeLog): ReportChangeLog {
+  getDb().changeLogs.push(entry);
   persist();
   return entry;
 }

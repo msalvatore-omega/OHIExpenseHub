@@ -13,6 +13,7 @@ import { formatCurrency, formatDate } from "@/lib/format";
 import { getExpenseTypes, getReceipts, getReport, getUsers } from "@/lib/data";
 import type { ApprovalAction, Receipt } from "@/lib/types";
 import { StatusPill } from "@/components/status-pill";
+import { ChangeHistoryButton } from "@/components/reports/report-change-history";
 import {
   Dialog,
   DialogContent,
@@ -118,8 +119,9 @@ export function ReportDetailView({
       <header className="flex flex-col gap-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h1>{report.reportName}</h1>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <StatusPill status={report.status} />
+            <ChangeHistoryButton reportId={reportId} />
             {actions}
           </div>
         </div>

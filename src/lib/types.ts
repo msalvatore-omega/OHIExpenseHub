@@ -14,6 +14,14 @@ export type ReportStatus =
 
 export type ApprovalAction = "PENDING" | "APPROVED" | "REJECTED";
 
+/** Category of an audited report change (mirrors the ReportChangeType enum). */
+export type ReportChangeType =
+  | "STATUS"
+  | "AMOUNT"
+  | "LINE_ITEM"
+  | "FIELD"
+  | "OTHER";
+
 export interface User {
   id: string;
   azureAdId: string;
@@ -102,6 +110,24 @@ export interface MockEmail {
   subject: string;
   body: string;
   sentAt: string;
+}
+
+/**
+ * An audit-log entry recording a single change to a report after it has been
+ * submitted. Mirrors the Prisma ReportChangeLog model.
+ */
+export interface ReportChangeLog {
+  id: string;
+  reportId: string;
+  changedById: string;
+  changedAt: string;
+  changeType: ReportChangeType;
+  /** The field/column that changed, when applicable (e.g. "status", "reportName"). */
+  field?: string;
+  oldValue?: string;
+  newValue?: string;
+  /** Human-readable one-line description of the change. */
+  summary: string;
 }
 
 // ---- Derived / view types used by the data-access layer ----
@@ -231,6 +257,20 @@ export interface AccountingReportRow {
   submitterName: string;
   paidToName: string;
   department: string;
+}
+
+/**
+ * A change-log entry enriched with the report + actor metadata the global
+ * Change Log table needs to display and filter (by person/period).
+ */
+export interface ReportChangeLogRow {
+  change: ReportChangeLog;
+  reportName: string;
+  changedByName: string;
+  submitterId: string;
+  paidToId: string;
+  periodFrom: string;
+  periodTo: string;
 }
 
 export interface DelegateInput {

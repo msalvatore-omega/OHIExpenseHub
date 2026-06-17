@@ -1,0 +1,94 @@
+// Prisma schema for OHI Expense Hub.
+//
+// The app currently runs on the in-memory mock layer (src/lib/data), which is
+// written to mirror this eventual persisted schema. This file scaffolds the
+// SQL Server data model; ReportChangeLog is the audit trail backing the
+// "Change History" / "Change Log" features. User and ExpenseReport are included
+// here because ReportChangeLog relates to them — additional domain models
+// (ExpenseLineItem, Receipt, etc.) can be filled in as persistence lands.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlserver"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  SUBMITTER
+  APPROVER
+  ADMIN
+  ACCOUNTING
+}
+
+enum ReportStatus {
+  DRAFT
+  SUBMITTED
+  IN_REVIEW
+  APPROVED
+  REJECTED
+  PAID
+}
+
+enum ReportChangeType {
+  STATUS
+  AMOUNT
+  LINE_ITEM
+  FIELD
+  OTHER
+}
+
+model User {
+  id          String   @id @default(cuid())
+  azureAdId   String?  @unique
+  email       String   @unique
+  name        String
+  department  String
+  role        UserRole
+  managerId   String?
+  manager     User?    @relation("UserManager", fields: [managerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  reports     User[]   @relation("UserManager")
+
+  submittedReports ExpenseReport[]   @relation("ReportSubmitter")
+  paidReports      ExpenseReport[]   @relation("ReportPayee")
+  reportChanges    ReportChangeLog[] @relation("ChangeAuthor")
+}
+
+model ExpenseReport {
+  id           String       @id @default(cuid())
+  reportName   String       @db.NVarChar(200)
+  submitterId  String
+  submitter    User         @relation("ReportSubmitter", fields: [submitterId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  onBehalfOfId String?
+  paidToId     String
+  paidTo       User         @relation("ReportPayee", fields: [paidToId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  periodFrom   DateTime
+  periodTo     DateTime
+  status       ReportStatus @default(DRAFT)
+  totalAmount  Decimal      @db.Decimal(12, 2)
+  submittedAt  DateTime?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  changeLogs ReportChangeLog[]
+}
+
+/// Audit trail: one row per change to a report after it has been submitted.
+model ReportChangeLog {
+  id          String           @id @default(cuid())
+  reportId    String
+  report      ExpenseReport    @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  changedById String
+  changedBy   User             @relation("ChangeAuthor", fields: [changedById], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  changedAt   DateTime         @default(now())
+  changeType  ReportChangeType
+  field       String?          @db.NVarChar(100)
+  oldValue    String?          @db.NVarChar(Max)
+  newValue    String?          @db.NVarChar(Max)
+  summary     String           @db.NVarChar(500)
+
+  @@index([reportId, changedAt])
+  @@index([changedById])
+}

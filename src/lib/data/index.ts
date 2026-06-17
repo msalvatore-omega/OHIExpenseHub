@@ -9,10 +9,12 @@ import {
   findReceipt,
   findReport,
   insertApprovalHistory,
+  insertChangeLog,
   insertEmail,
   insertReceipt,
   insertReport,
   listApprovalHistory,
+  listChangeLogs,
   listDelegates,
   listExpenseTypes,
   listLineItems,
@@ -53,6 +55,9 @@ import type {
   MockEmail,
   Receipt,
   ReceiptFilter,
+  ReportChangeLog,
+  ReportChangeLogRow,
+  ReportChangeType,
   ReportDetail,
   ReportFilter,
   ReportRoutingRow,
@@ -127,6 +132,50 @@ function toRoutingRow(report: ExpenseReport): ReportRoutingRow {
   };
 }
 
+const STATUS_LABEL: Record<ReportStatus, string> = {
+  DRAFT: "Draft",
+  SUBMITTED: "Submitted",
+  IN_REVIEW: "In Review",
+  APPROVED: "Approved",
+  REJECTED: "Rejected",
+  PAID: "Paid",
+};
+
+/** Header fields whose post-submission edits are audited, with display labels. */
+const AUDITED_FIELD_LABEL: Partial<Record<keyof ExpenseReport, string>> = {
+  reportName: "Report name",
+  paidToId: "Paid to",
+  onBehalfOfId: "On behalf of",
+  periodFrom: "Period start",
+  periodTo: "Period end",
+};
+
+/** A report is audited (every change logged) once it has been submitted. */
+function isAudited(report: ExpenseReport): boolean {
+  return Boolean(report.submittedAt) || report.status !== "DRAFT";
+}
+
+/** Append one entry to the report's change log (the audit trail). */
+function recordChange(
+  reportId: string,
+  changedById: string,
+  changeType: ReportChangeType,
+  summary: string,
+  extra?: { field?: string; oldValue?: string; newValue?: string }
+): ReportChangeLog {
+  return insertChangeLog({
+    id: newId("change"),
+    reportId,
+    changedById,
+    changedAt: nowIso(),
+    changeType,
+    field: extra?.field,
+    oldValue: extra?.oldValue,
+    newValue: extra?.newValue,
+    summary,
+  });
+}
+
 const OPEN_STATUSES: ReportStatus[] = ["SUBMITTED", "IN_REVIEW"];
 const ACTIVE_STATUSES: ReportStatus[] = [
   "SUBMITTED",
@@ -152,6 +201,11 @@ function accountingEmail(): string {
     listUsers().find((u) => u.role === "ACCOUNTING")?.email ??
     "accounting@ohi.example.com"
   );
+}
+
+/** Fallback actor for audited actions taken outside an explicit session. */
+function accountingUserId(): string {
+  return listUsers().find((u) => u.role === "ACCOUNTING")?.id ?? "system";
 }
 
 /** Throw with a clear message if a report isn't ready to submit. */
@@ -246,6 +300,36 @@ export async function getReport(id: string): Promise<ReportDetail | null> {
   };
 }
 
+/** The audit trail for a single report, newest first. */
+export async function getReportChangeLogs(
+  reportId: string
+): Promise<ReportChangeLog[]> {
+  await delay();
+  return [...listChangeLogs(reportId)].sort((a, b) =>
+    b.changedAt.localeCompare(a.changedAt)
+  );
+}
+
+/** All change-log entries across reports, enriched for the global Change Log. */
+export async function getReportChanges(): Promise<ReportChangeLogRow[]> {
+  await delay();
+  const reportById = new Map(listReports().map((r) => [r.id, r]));
+  return [...listChangeLogs()]
+    .sort((a, b) => b.changedAt.localeCompare(a.changedAt))
+    .map((change) => {
+      const report = reportById.get(change.reportId);
+      return {
+        change,
+        reportName: report?.reportName ?? "—",
+        changedByName: userName(change.changedById),
+        submitterId: report?.submitterId ?? "",
+        paidToId: report?.paidToId ?? "",
+        periodFrom: report?.periodFrom ?? "",
+        periodTo: report?.periodTo ?? "",
+      };
+    });
+}
+
 export async function createDraft(
   input: CreateDraftInput
 ): Promise<ExpenseReport> {
@@ -269,11 +353,56 @@ export async function createDraft(
 
 export async function updateReport(
   id: string,
-  patch: Partial<ExpenseReport>
+  patch: Partial<ExpenseReport>,
+  actorId?: string
 ): Promise<ExpenseReport> {
   await delay();
+  const before = findReport(id);
+  if (!before) throw new Error(`Report ${id} not found`);
+  const audited = isAudited(before);
+  const snapshot = { ...before };
+
   const updated = patchReport(id, patch);
   if (!updated) throw new Error(`Report ${id} not found`);
+
+  if (audited) {
+    const who = actorId ?? before.submitterId;
+    for (const key of Object.keys(patch) as (keyof ExpenseReport)[]) {
+      if (key === "updatedAt") continue;
+      const oldV = snapshot[key];
+      const newV = updated[key];
+      if (oldV === newV) continue;
+
+      if (key === "status") {
+        recordChange(
+          id,
+          who,
+          "STATUS",
+          `Status changed from ${STATUS_LABEL[oldV as ReportStatus]} to ${STATUS_LABEL[newV as ReportStatus]}`,
+          { field: "status", oldValue: String(oldV), newValue: String(newV) }
+        );
+      } else if (key === "totalAmount") {
+        recordChange(
+          id,
+          who,
+          "AMOUNT",
+          `Total changed from ${currency(Number(oldV))} to ${currency(Number(newV))}`,
+          { field: "totalAmount", oldValue: String(oldV), newValue: String(newV) }
+        );
+      } else if (key in AUDITED_FIELD_LABEL) {
+        const label = AUDITED_FIELD_LABEL[key]!;
+        const fmt = (v: unknown) =>
+          key === "paidToId" || key === "onBehalfOfId"
+            ? userName(v as string)
+            : String(v ?? "—");
+        recordChange(id, who, "FIELD", `${label} changed from "${fmt(oldV)}" to "${fmt(newV)}"`, {
+          field: String(key),
+          oldValue: fmt(oldV),
+          newValue: fmt(newV),
+        });
+      }
+    }
+  }
   return updated;
 }
 
@@ -291,11 +420,16 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
  */
 export async function replaceLineItems(
   reportId: string,
-  items: LineItemInput[]
+  items: LineItemInput[],
+  actorId?: string
 ): Promise<ExpenseLineItem[]> {
   await delay();
   const report = findReport(reportId);
   if (!report) throw new Error(`Report ${reportId} not found`);
+
+  const audited = isAudited(report);
+  const before = audited ? [...listLineItems(reportId)] : [];
+  const prevTotal = report.totalAmount;
 
   const mileageTypeIds = new Set(
     listExpenseTypes().filter((t) => t.isMileage).map((t) => t.id)
@@ -325,7 +459,65 @@ export async function replaceLineItems(
   });
 
   replaceLineItemsForReport(reportId, normalized);
-  recalcReportTotal(reportId);
+  const newTotal = recalcReportTotal(reportId);
+
+  if (audited) {
+    const who = actorId ?? report.submitterId;
+    const beforeById = new Map(before.map((li) => [li.id, li]));
+    const afterById = new Map(normalized.map((li) => [li.id, li]));
+
+    for (const li of normalized) {
+      if (beforeById.has(li.id)) continue;
+      recordChange(
+        reportId,
+        who,
+        "LINE_ITEM",
+        `Line item added: ${li.description || "—"} (${currency(li.amount)})`,
+        { field: "lineItem", newValue: li.description }
+      );
+    }
+    for (const li of before) {
+      if (afterById.has(li.id)) continue;
+      recordChange(
+        reportId,
+        who,
+        "LINE_ITEM",
+        `Line item removed: ${li.description || "—"} (${currency(li.amount)})`,
+        { field: "lineItem", oldValue: li.description }
+      );
+    }
+    for (const li of normalized) {
+      const old = beforeById.get(li.id);
+      if (!old) continue;
+      if (
+        old.amount !== li.amount ||
+        old.description !== li.description ||
+        old.expenseTypeId !== li.expenseTypeId ||
+        old.expenseDate !== li.expenseDate
+      ) {
+        recordChange(
+          reportId,
+          who,
+          "LINE_ITEM",
+          `Line item edited: ${li.description || old.description || "—"}`,
+          {
+            field: "lineItem",
+            oldValue: currency(old.amount),
+            newValue: currency(li.amount),
+          }
+        );
+      }
+    }
+    if (newTotal !== prevTotal) {
+      recordChange(
+        reportId,
+        who,
+        "AMOUNT",
+        `Total changed from ${currency(prevTotal)} to ${currency(newTotal)}`,
+        { field: "totalAmount", oldValue: String(prevTotal), newValue: String(newTotal) }
+      );
+    }
+  }
   return normalized;
 }
 
@@ -389,7 +581,15 @@ export async function approveReport(
     comment,
     createdAt: timestamp,
   });
+  const prevStatus = report.status;
   const updated = patchReport(id, { status: "APPROVED" })!;
+  recordChange(
+    id,
+    approverId,
+    "STATUS",
+    `Status changed from ${STATUS_LABEL[prevStatus]} to ${STATUS_LABEL.APPROVED}`,
+    { field: "status", oldValue: prevStatus, newValue: "APPROVED" }
+  );
 
   const notifications: MockEmail[] = [];
   const recipient = userById(report.paidToId) ?? submitter;
@@ -433,7 +633,15 @@ export async function rejectReport(
     comment,
     createdAt: timestamp,
   });
+  const prevStatus = report.status;
   const updated = patchReport(id, { status: "REJECTED" })!;
+  recordChange(
+    id,
+    approverId,
+    "STATUS",
+    `Status changed from ${STATUS_LABEL[prevStatus]} to ${STATUS_LABEL.REJECTED}`,
+    { field: "status", oldValue: prevStatus, newValue: "REJECTED" }
+  );
 
   const notifications: MockEmail[] = [];
   const recipient = userById(report.paidToId) ?? submitter;
@@ -449,12 +657,26 @@ export async function rejectReport(
   return { report: updated, notifications };
 }
 
-export async function markPaid(id: string): Promise<ApprovalActionResult> {
+export async function markPaid(
+  id: string,
+  actorId?: string
+): Promise<ApprovalActionResult> {
   await delay();
   const report = findReport(id);
   if (!report) throw new Error(`Report ${id} not found`);
 
+  const prevStatus = report.status;
   const updated = patchReport(id, { status: "PAID" })!;
+  if (prevStatus !== "PAID") {
+    recordChange(
+      id,
+      actorId ?? accountingUserId(),
+      "STATUS",
+      "Marked as paid",
+      { field: "status", oldValue: prevStatus, newValue: "PAID" }
+    );
+  }
+
   const notifications: MockEmail[] = [];
   const recipient = userById(report.paidToId);
   if (recipient) {
@@ -465,6 +687,47 @@ export async function markPaid(id: string): Promise<ApprovalActionResult> {
         `Your reimbursement for (${report.reportName}) totaling ${currency(updated.totalAmount)} has been paid.`
       )
     );
+  }
+  return { report: updated, notifications };
+}
+
+/**
+ * Accounting/admin override of a report's status. Logs a STATUS change and, when
+ * set to PAID, queues the same payment notice Mark-as-Paid sends.
+ */
+export async function changeReportStatus(
+  id: string,
+  status: ReportStatus,
+  changedById: string
+): Promise<ApprovalActionResult> {
+  await delay();
+  const report = findReport(id);
+  if (!report) throw new Error(`Report ${id} not found`);
+
+  const prevStatus = report.status;
+  if (prevStatus === status) return { report, notifications: [] };
+
+  const updated = patchReport(id, { status })!;
+  recordChange(
+    id,
+    changedById,
+    "STATUS",
+    `Status changed from ${STATUS_LABEL[prevStatus]} to ${STATUS_LABEL[status]}`,
+    { field: "status", oldValue: prevStatus, newValue: status }
+  );
+
+  const notifications: MockEmail[] = [];
+  if (status === "PAID") {
+    const recipient = userById(report.paidToId);
+    if (recipient) {
+      notifications.push(
+        sendMockEmail(
+          recipient.email,
+          `Reimbursement Paid: ${report.reportName}`,
+          `Your reimbursement for (${report.reportName}) totaling ${currency(updated.totalAmount)} has been paid.`
+        )
+      );
+    }
   }
   return { report: updated, notifications };
 }

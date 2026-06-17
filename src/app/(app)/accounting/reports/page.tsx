@@ -6,9 +6,10 @@ export default function AccountingReportsPage() {
     <RoleGuard allow={["ACCOUNTING", "ADMIN"]}>
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-6 py-8">
         <header>
-          <h1>Accounting — Reports</h1>
+          <h1>Accounting — Expense Reports</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Review reports, summarize spend by type, and detect duplicates.
+            Review reports, edit status, summarize spend, detect duplicates, and
+            audit changes.
           </p>
         </header>
         <AccountingReports />

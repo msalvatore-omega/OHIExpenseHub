@@ -11,6 +11,7 @@ import type {
   ExpenseType,
   MockEmail,
   Receipt,
+  ReportChangeLog,
   User,
 } from "@/lib/types";
 
@@ -23,6 +24,7 @@ export interface Database {
   lineItems: ExpenseLineItem[];
   receipts: Receipt[];
   approvalHistory: ApprovalHistory[];
+  changeLogs: ReportChangeLog[];
   outbox: MockEmail[];
 }
 
@@ -722,6 +724,45 @@ function buildOutbox(): MockEmail[] {
   ];
 }
 
+/** A few illustrative audit-trail entries so the Change Log starts populated. */
+function buildChangeLogs(): ReportChangeLog[] {
+  return [
+    {
+      id: "change-001",
+      reportId: "report-003",
+      changedById: U.approver1,
+      changedAt: "2026-05-23T14:12:00.000Z",
+      changeType: "STATUS",
+      field: "status",
+      oldValue: "SUBMITTED",
+      newValue: "IN_REVIEW",
+      summary: "Status changed from Submitted to In Review",
+    },
+    {
+      id: "change-002",
+      reportId: "report-004",
+      changedById: U.approver1,
+      changedAt: "2026-04-26T15:30:00.000Z",
+      changeType: "STATUS",
+      field: "status",
+      oldValue: "IN_REVIEW",
+      newValue: "APPROVED",
+      summary: "Status changed from In Review to Approved",
+    },
+    {
+      id: "change-003",
+      reportId: "report-006",
+      changedById: U.accounting,
+      changedAt: "2026-03-12T10:05:00.000Z",
+      changeType: "STATUS",
+      field: "status",
+      oldValue: "APPROVED",
+      newValue: "PAID",
+      summary: "Marked as paid",
+    },
+  ];
+}
+
 export function createSeedData(): Database {
   const specs = buildReportSpecs();
 
@@ -741,6 +782,7 @@ export function createSeedData(): Database {
     lineItems,
     receipts: buildReceipts(),
     approvalHistory,
+    changeLogs: buildChangeLogs(),
     outbox: buildOutbox(),
   };
 }

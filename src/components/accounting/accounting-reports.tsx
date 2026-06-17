@@ -22,13 +22,14 @@ import {
 import { toast } from "sonner";
 
 import { cn } from "@/lib/utils";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrency, formatDate, formatDateTime } from "@/lib/format";
 import {
   getAccountingReports,
   getExpenseTypes,
   getLedgerEntries,
   getReceipts,
   getReport,
+  getReportChanges,
   getUsers,
   markPaid,
 } from "@/lib/data";
@@ -41,9 +42,12 @@ import type {
   ExpenseReport,
   ExpenseType,
   Receipt,
+  ReportChangeLogRow,
+  ReportChangeType,
   User,
 } from "@/lib/types";
-import { StatusPill } from "@/components/status-pill";
+import { ReportStatusSelect } from "@/components/reports/report-status-select";
+import { ChangeHistoryDialog } from "@/components/reports/report-change-history";
 import { DuplicateDetection } from "@/components/accounting/duplicate-detection";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -111,6 +115,7 @@ export function AccountingReports() {
         <TabsTrigger value="reports">Reports</TabsTrigger>
         <TabsTrigger value="summary">Expense-Type Summary</TabsTrigger>
         <TabsTrigger value="duplicates">Duplicate Detection</TabsTrigger>
+        <TabsTrigger value="changelog">Change Log</TabsTrigger>
       </TabsList>
 
       <TabsContent value="reports" className="flex flex-col gap-4 pt-4">
@@ -125,6 +130,11 @@ export function AccountingReports() {
 
       <TabsContent value="duplicates" className="pt-4">
         <DuplicateDetection />
+      </TabsContent>
+
+      <TabsContent value="changelog" className="flex flex-col gap-4 pt-4">
+        {filters}
+        <ChangeLogTab filter={filter} />
       </TabsContent>
     </Tabs>
   );
@@ -348,8 +358,11 @@ function ReportsTab({
                 <TableCell className="text-right tabular-nums">
                   {formatCurrency(report.totalAmount)}
                 </TableCell>
-                <TableCell>
-                  <StatusPill status={report.status} />
+                <TableCell onClick={(e) => e.stopPropagation()}>
+                  <ReportStatusSelect
+                    reportId={report.id}
+                    status={report.status}
+                  />
                 </TableCell>
                 <RowActionCells
                   report={report}
@@ -599,5 +612,181 @@ function ExpenseTypeSummaryTab({
         </TableBody>
       </Table>
     </div>
+  );
+}
+
+// ---------------- Tab 4: Change Log ----------------
+
+const CHANGE_TYPE_LABEL: Record<ReportChangeType, string> = {
+  STATUS: "Status",
+  AMOUNT: "Amount",
+  LINE_ITEM: "Line item",
+  FIELD: "Field",
+  OTHER: "Other",
+};
+
+type ChangeSortKey = "date" | "reportId" | "reportName" | "type" | "changedBy";
+
+function changeSortValue(row: ReportChangeLogRow, key: ChangeSortKey): string {
+  switch (key) {
+    case "date":
+      return row.change.changedAt;
+    case "reportId":
+      return row.change.reportId;
+    case "reportName":
+      return row.reportName.toLowerCase();
+    case "type":
+      return row.change.changeType;
+    case "changedBy":
+      return row.changedByName.toLowerCase();
+  }
+}
+
+function ChangeSortHeader({
+  label,
+  sortKey,
+  sort,
+  onSort,
+}: {
+  label: string;
+  sortKey: ChangeSortKey;
+  sort: { key: ChangeSortKey; dir: "asc" | "desc" };
+  onSort: (key: ChangeSortKey) => void;
+}) {
+  const active = sort.key === sortKey;
+  return (
+    <TableHead>
+      <button
+        type="button"
+        onClick={() => onSort(sortKey)}
+        aria-label={`Sort by ${label}`}
+        className={cn(
+          "inline-flex items-center gap-1 font-medium whitespace-nowrap transition-colors hover:text-foreground",
+          active ? "text-foreground" : "text-muted-foreground"
+        )}
+      >
+        {label}
+        {active ? (
+          sort.dir === "asc" ? (
+            <ArrowUp className="size-3.5" />
+          ) : (
+            <ArrowDown className="size-3.5" />
+          )
+        ) : (
+          <ChevronsUpDown className="size-3.5 opacity-40" />
+        )}
+      </button>
+    </TableHead>
+  );
+}
+
+function ChangeLogTab({ filter }: { filter: PeopleFilter }) {
+  const changes = useQuery({
+    queryKey: ["report-changes"],
+    queryFn: getReportChanges,
+  });
+
+  const [sort, setSort] = React.useState<{
+    key: ChangeSortKey;
+    dir: "asc" | "desc";
+  }>({ key: "date", dir: "desc" });
+  const [openReportId, setOpenReportId] = React.useState<string | null>(null);
+
+  const onSort = (key: ChangeSortKey) =>
+    setSort((prev) =>
+      prev.key === key
+        ? { key, dir: prev.dir === "asc" ? "desc" : "asc" }
+        : { key, dir: "asc" }
+    );
+
+  const rows = React.useMemo(() => {
+    const filtered = (changes.data ?? []).filter(
+      (r) =>
+        matchesPerson(r.submitterId, r.paidToId, filter) &&
+        periodOverlaps(r.periodFrom, r.periodTo, filter)
+    );
+    const dir = sort.dir === "asc" ? 1 : -1;
+    return [...filtered].sort(
+      (a, b) =>
+        changeSortValue(a, sort.key).localeCompare(
+          changeSortValue(b, sort.key)
+        ) * dir
+    );
+  }, [changes.data, filter, sort]);
+
+  return (
+    <>
+      <div className="overflow-hidden rounded-xl border border-border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <ChangeSortHeader label="Date & Time" sortKey="date" sort={sort} onSort={onSort} />
+              <ChangeSortHeader label="Report ID" sortKey="reportId" sort={sort} onSort={onSort} />
+              <ChangeSortHeader label="Report Name" sortKey="reportName" sort={sort} onSort={onSort} />
+              <ChangeSortHeader label="Type of Change" sortKey="type" sort={sort} onSort={onSort} />
+              <ChangeSortHeader label="Changed By" sortKey="changedBy" sort={sort} onSort={onSort} />
+              <TableHead>Details</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {changes.isLoading ? (
+              Array.from({ length: 4 }).map((_, i) => (
+                <TableRow key={i}>
+                  {Array.from({ length: 6 }).map((__, j) => (
+                    <TableCell key={j}>
+                      <Skeleton className="h-4 w-full" />
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))
+            ) : rows.length === 0 ? (
+              <TableRow>
+                <TableCell
+                  colSpan={6}
+                  className="h-24 text-center text-sm text-muted-foreground"
+                >
+                  No changes match the current filters.
+                </TableCell>
+              </TableRow>
+            ) : (
+              rows.map((r) => (
+                <TableRow
+                  key={r.change.id}
+                  onClick={() => setOpenReportId(r.change.reportId)}
+                  className="cursor-pointer"
+                >
+                  <TableCell className="whitespace-nowrap text-muted-foreground">
+                    {formatDateTime(r.change.changedAt)}
+                  </TableCell>
+                  <TableCell className="font-mono text-xs text-muted-foreground">
+                    {r.change.reportId}
+                  </TableCell>
+                  <TableCell className="font-medium">{r.reportName}</TableCell>
+                  <TableCell>{CHANGE_TYPE_LABEL[r.change.changeType]}</TableCell>
+                  <TableCell className="whitespace-nowrap">
+                    {r.changedByName}
+                  </TableCell>
+                  <TableCell className="max-w-xs">
+                    <span className="text-sm">{r.change.summary}</span>
+                    {r.change.oldValue != null &&
+                      r.change.newValue != null && (
+                        <span className="ml-1 text-xs text-muted-foreground">
+                          ({r.change.oldValue} → {r.change.newValue})
+                        </span>
+                      )}
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
+
+      <ChangeHistoryDialog
+        reportId={openReportId}
+        open={openReportId !== null}
+        onOpenChange={(o) => !o && setOpenReportId(null)}
+      />
+    </>
   );
 }

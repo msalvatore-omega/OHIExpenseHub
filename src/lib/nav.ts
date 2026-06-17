@@ -53,7 +53,7 @@ export const NAV_ITEMS: NavItem[] = [
     roles: ["ACCOUNTING", "ADMIN"],
     children: [
       { label: "Analytics", href: "/accounting/analytics", icon: BarChart3 },
-      { label: "Reports", href: "/accounting/reports", icon: FileText },
+      { label: "Expense Reports", href: "/accounting/reports", icon: FileText },
     ],
   },
   { label: "Admin", href: "/admin", icon: Shield, roles: ["ADMIN"] },
