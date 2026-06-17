@@ -10,7 +10,6 @@ import {
   FileText,
   Home,
   Images,
-  Inbox,
   ReceiptText,
   Shield,
 } from "lucide-react";
@@ -40,12 +39,6 @@ export const NAV_ITEMS: NavItem[] = [
   { label: "My Expenses", href: "/my-expenses", icon: ReceiptText },
   { label: "Approvals", href: "/approvals", icon: ClipboardCheck },
   { label: "Receipt Gallery", href: "/gallery", icon: Images },
-  {
-    label: "Outbox",
-    href: "/outbox",
-    icon: Inbox,
-    roles: ["APPROVER", "ADMIN", "ACCOUNTING"],
-  },
   {
     label: "Reports & Analytics",
     href: "/accounting",

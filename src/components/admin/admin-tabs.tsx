@@ -5,16 +5,21 @@
 
 import * as React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 
+import { cn } from "@/lib/utils";
 import {
   createDelegate,
   createExpenseType,
+  createUser,
   deleteDelegate,
+  deleteUser,
   getDelegates,
   getExpenseTypes,
+  getUserDeletability,
   getUsers,
+  setUserActive,
   updateExpenseType,
   updateUser,
 } from "@/lib/data";
@@ -78,11 +83,24 @@ function UsersTab() {
   const qc = useQueryClient();
   const users = useQuery({ queryKey: ["users"], queryFn: getUsers });
   const [editing, setEditing] = React.useState<User | null>(null);
+  const [adding, setAdding] = React.useState(false);
+  const [deleting, setDeleting] = React.useState<User | null>(null);
 
-  const nameById = new Map((users.data ?? []).map((u) => [u.id, u.name]));
+  const all = users.data ?? [];
+  const activeUsers = all.filter((u) => u.isActive);
+  const nameById = new Map(all.map((u) => [u.id, u.name]));
+
+  const invalidate = () => qc.invalidateQueries({ queryKey: ["users"] });
 
   return (
-    <>
+    <div className="flex flex-col gap-4">
+      <div className="flex justify-end">
+        <Button onClick={() => setAdding(true)}>
+          <UserPlus className="size-4" />
+          Add User
+        </Button>
+      </div>
+
       <div className="overflow-hidden rounded-xl border border-border">
         <Table>
           <TableHeader>
@@ -91,38 +109,326 @@ function UsersTab() {
               <TableHead>Department</TableHead>
               <TableHead>Role</TableHead>
               <TableHead>Manager</TableHead>
-              <TableHead className="text-right">Edit</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {(users.data ?? []).map((u) => (
-              <TableRow key={u.id}>
+            {all.map((u) => (
+              <TableRow key={u.id} className={cn(!u.isActive && "opacity-60")}>
                 <TableCell className="font-medium">{u.name}</TableCell>
                 <TableCell>{u.department}</TableCell>
                 <TableCell>{u.role}</TableCell>
                 <TableCell>
                   {u.managerId ? nameById.get(u.managerId) ?? "—" : "—"}
                 </TableCell>
+                <TableCell>
+                  <StatusIndicator active={u.isActive} />
+                </TableCell>
                 <TableCell className="text-right">
-                  <Button variant="outline" size="sm" onClick={() => setEditing(u)}>
-                    Edit
-                  </Button>
+                  <div className="flex justify-end gap-1">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setEditing(u)}
+                    >
+                      Edit
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      className="text-muted-foreground hover:text-destructive"
+                      onClick={() => setDeleting(u)}
+                      aria-label={`Delete ${u.name}`}
+                    >
+                      <Trash2 className="size-4" />
+                    </Button>
+                  </div>
                 </TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
       </div>
+
       <EditUserDialog
         user={editing}
-        users={users.data ?? []}
+        users={activeUsers}
         onClose={() => setEditing(null)}
         onSaved={() => {
-          qc.invalidateQueries({ queryKey: ["users"] });
+          invalidate();
           setEditing(null);
         }}
       />
-    </>
+      <AddUserDialog
+        open={adding}
+        users={activeUsers}
+        onClose={() => setAdding(false)}
+        onSaved={() => {
+          invalidate();
+          setAdding(false);
+        }}
+      />
+      <DeleteUserDialog
+        user={deleting}
+        onClose={() => setDeleting(null)}
+        onDone={() => {
+          invalidate();
+          setDeleting(null);
+        }}
+      />
+    </div>
+  );
+}
+
+function StatusIndicator({ active }: { active: boolean }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium",
+        active ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"
+      )}
+    >
+      <span
+        className={cn(
+          "size-1.5 rounded-full",
+          active ? "bg-success" : "bg-muted-foreground"
+        )}
+      />
+      {active ? "Active" : "Inactive"}
+    </span>
+  );
+}
+
+function AddUserDialog({
+  open,
+  users,
+  onClose,
+  onSaved,
+}: {
+  open: boolean;
+  users: User[];
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [email, setEmail] = React.useState("");
+  const [name, setName] = React.useState("");
+  const [department, setDepartment] = React.useState("");
+  const [role, setRole] = React.useState<UserRole>("SUBMITTER");
+  const [managerId, setManagerId] = React.useState("");
+
+  React.useEffect(() => {
+    if (open) {
+      // Reset the form each time the dialog opens.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setEmail("");
+      setName("");
+      setDepartment("");
+      setRole("SUBMITTER");
+      setManagerId("");
+    }
+  }, [open]);
+
+  const mutation = useMutation({
+    mutationFn: () =>
+      createUser({ email, name, department, role, managerId: managerId || null }),
+    onSuccess: () => {
+      toast.success("User created");
+      onSaved();
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Add user</DialogTitle>
+        </DialogHeader>
+        <div className="flex flex-col gap-3">
+          <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+            Email <span className="text-destructive">*</span>
+            <Input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="name@ohi.example.com"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+            Name
+            <Input value={name} onChange={(e) => setName(e.target.value)} />
+          </label>
+          <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+            Department
+            <Input
+              value={department}
+              onChange={(e) => setDepartment(e.target.value)}
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+            Role
+            <select
+              className={SELECT_CLASS}
+              value={role}
+              onChange={(e) => setRole(e.target.value as UserRole)}
+            >
+              {ROLES.map((r) => (
+                <option key={r} value={r}>
+                  {r}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+            Manager
+            <select
+              className={SELECT_CLASS}
+              value={managerId}
+              onChange={(e) => setManagerId(e.target.value)}
+            >
+              <option value="">— None —</option>
+              {users.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <p className="text-xs text-muted-foreground">
+            The account links to Azure AD on the user&apos;s first sign-in
+            (matched by email).
+          </p>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            onClick={() => mutation.mutate()}
+            disabled={mutation.isPending || !email.trim()}
+          >
+            Create
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function DeleteUserDialog({
+  user,
+  onClose,
+  onDone,
+}: {
+  user: User | null;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const usage = useQuery({
+    queryKey: ["user-deletability", user?.id],
+    queryFn: () => getUserDeletability(user!.id),
+    enabled: !!user,
+  });
+  const canHardDelete = usage.data?.canHardDelete ?? false;
+  const active = user?.isActive ?? true;
+
+  const onError = (e: unknown) =>
+    toast.error(e instanceof Error ? e.message : "Failed");
+
+  const deactivate = useMutation({
+    mutationFn: () => setUserActive(user!.id, false),
+    onSuccess: () => {
+      toast.success("User deactivated");
+      onDone();
+    },
+    onError,
+  });
+  const reactivate = useMutation({
+    mutationFn: () => setUserActive(user!.id, true),
+    onSuccess: () => {
+      toast.success("User reactivated");
+      onDone();
+    },
+    onError,
+  });
+  const hardDelete = useMutation({
+    mutationFn: () => deleteUser(user!.id),
+    onSuccess: () => {
+      toast.success("User deleted");
+      onDone();
+    },
+    onError,
+  });
+
+  const busy =
+    deactivate.isPending || reactivate.isPending || hardDelete.isPending;
+
+  return (
+    <Dialog open={!!user} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>
+            {active ? `Deactivate ${user?.name}?` : `Delete ${user?.name}?`}
+          </DialogTitle>
+        </DialogHeader>
+        <div className="flex flex-col gap-2 text-sm text-muted-foreground">
+          {active ? (
+            <p>
+              Deactivating prevents{" "}
+              <span className="font-medium text-foreground">{user?.name}</span>{" "}
+              from signing in or being selected, while keeping their historical
+              reports and approval history intact.
+            </p>
+          ) : (
+            <p>
+              <span className="font-medium text-foreground">{user?.name}</span>{" "}
+              is already inactive. You can reactivate them, or permanently delete
+              if nothing references them.
+            </p>
+          )}
+          {usage.isLoading ? (
+            <p className="text-xs">Checking related records…</p>
+          ) : canHardDelete ? (
+            <p className="text-xs">
+              No reports, approvals, or delegate records reference this user — a
+              permanent delete is available.
+            </p>
+          ) : (
+            <p className="text-xs">
+              This user is referenced by existing records, so a permanent delete
+              isn&apos;t available — deactivate instead.
+            </p>
+          )}
+        </div>
+        <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-end">
+          <Button variant="outline" onClick={onClose} disabled={busy}>
+            Cancel
+          </Button>
+          {active ? (
+            <Button onClick={() => deactivate.mutate()} disabled={busy}>
+              Deactivate
+            </Button>
+          ) : (
+            <Button
+              variant="outline"
+              onClick={() => reactivate.mutate()}
+              disabled={busy}
+            >
+              Reactivate
+            </Button>
+          )}
+          <Button
+            variant="outline"
+            className="border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+            disabled={busy || usage.isLoading || !canHardDelete}
+            onClick={() => hardDelete.mutate()}
+          >
+            Delete permanently
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -142,6 +448,7 @@ function EditUserDialog({
 
   React.useEffect(() => {
     if (user) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setRole(user.role);
       setManagerId(user.managerId ?? "");
     }
@@ -216,6 +523,8 @@ function DelegatesTab() {
   const delegates = useQuery({ queryKey: ["delegates"], queryFn: getDelegates });
   const users = useQuery({ queryKey: ["users"], queryFn: getUsers });
   const nameById = new Map((users.data ?? []).map((u) => [u.id, u.name]));
+  // Only active users can be picked as a delegate or principal.
+  const selectableUsers = (users.data ?? []).filter((u) => u.isActive);
 
   const [delegateId, setDelegateId] = React.useState("");
   const [principalId, setPrincipalId] = React.useState("");
@@ -253,7 +562,7 @@ function DelegatesTab() {
             onChange={(e) => setDelegateId(e.target.value)}
           >
             <option value="">Select…</option>
-            {(users.data ?? []).map((u) => (
+            {selectableUsers.map((u) => (
               <option key={u.id} value={u.id}>
                 {u.name}
               </option>
@@ -268,7 +577,7 @@ function DelegatesTab() {
             onChange={(e) => setPrincipalId(e.target.value)}
           >
             <option value="">Select…</option>
-            {(users.data ?? []).map((u) => (
+            {selectableUsers.map((u) => (
               <option key={u.id} value={u.id}>
                 {u.name}
               </option>
@@ -414,6 +723,7 @@ function ExpenseTypeDialog({
 
   React.useEffect(() => {
     if (open) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setDisplayName(type?.displayName ?? "");
       setAccountingCode(type?.accountingCode ?? "");
       setIsMileage(type?.isMileage ?? false);

@@ -42,11 +42,16 @@ enum ReportChangeType {
 
 model User {
   id          String   @id @default(cuid())
+  // Null until the person's first Azure AD login, which matches them by email
+  // and fills this in.
   azureAdId   String?  @unique
   email       String   @unique
   name        String
   department  String
   role        UserRole
+  // Soft-delete flag: inactive users can no longer sign in or be selected, but
+  // their historical reports and approval history remain intact.
+  isActive    Boolean  @default(true)
   managerId   String?
   manager     User?    @relation("UserManager", fields: [managerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   reports     User[]   @relation("UserManager")

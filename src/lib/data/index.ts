@@ -26,6 +26,7 @@ import {
   nowIso,
   insertDelegate,
   insertExpenseType,
+  insertUser,
   patchExpenseType,
   patchReceipt,
   patchReport,
@@ -33,9 +34,11 @@ import {
   recalcReportTotal,
   removeDelegate,
   removeReport,
+  removeUser,
   replaceLineItemsForReport,
+  userHasRelations,
 } from "@/lib/data/store";
-import { APP_NAME, MILEAGE_RATE } from "@/lib/constants";
+import { MILEAGE_RATE } from "@/lib/constants";
 import type {
   AccountingReportRow,
   AnalyticsFilter,
@@ -43,6 +46,7 @@ import type {
   ApprovalHistory,
   CreateDraftInput,
   CreateReceiptInput,
+  CreateUserInput,
   Delegate,
   DelegateInput,
   ExpenseTypeInput,
@@ -837,7 +841,8 @@ export async function getDelegatedPrincipals(
       .filter((d) => d.delegateId === delegateId && d.isActive)
       .map((d) => d.principalId)
   );
-  return listUsers().filter((u) => principalIds.has(u.id));
+  // Exclude deactivated principals from the people picker.
+  return listUsers().filter((u) => principalIds.has(u.id) && u.isActive);
 }
 
 export async function getExpenseTypes(): Promise<ExpenseType[]> {
@@ -944,6 +949,59 @@ export async function updateUser(
   const user = patchUser(id, patch);
   if (!user) throw new Error(`User ${id} not found`);
   return user;
+}
+
+/**
+ * Create a user. azureAdId is left null until the person's first Azure AD login,
+ * which matches them by email and fills it in.
+ */
+export async function createUser(input: CreateUserInput): Promise<User> {
+  await delay();
+  const email = input.email.trim();
+  if (!email) throw new Error("Email is required.");
+  if (listUsers().some((u) => u.email.toLowerCase() === email.toLowerCase())) {
+    throw new Error("A user with this email already exists.");
+  }
+  return insertUser({
+    id: newId("user"),
+    azureAdId: null,
+    email,
+    name: input.name.trim() || email,
+    department: input.department.trim(),
+    role: input.role,
+    isActive: true,
+    managerId: input.managerId || null,
+  });
+}
+
+/** Whether a user can be hard-deleted (no reports/approvals/delegates/changes). */
+export async function getUserDeletability(
+  id: string
+): Promise<{ canHardDelete: boolean }> {
+  await delay();
+  return { canHardDelete: !userHasRelations(id) };
+}
+
+/** Soft-delete: deactivate a user (they keep their historical records). */
+export async function setUserActive(
+  id: string,
+  isActive: boolean
+): Promise<User> {
+  await delay();
+  const user = patchUser(id, { isActive });
+  if (!user) throw new Error(`User ${id} not found`);
+  return user;
+}
+
+/** Permanently delete a user — only allowed when nothing references them. */
+export async function deleteUser(id: string): Promise<void> {
+  await delay();
+  if (userHasRelations(id)) {
+    throw new Error(
+      "User has related records and can't be permanently deleted. Deactivate instead."
+    );
+  }
+  if (!removeUser(id)) throw new Error(`User ${id} not found`);
 }
 
 export async function getDelegates(): Promise<Delegate[]> {

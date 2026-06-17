@@ -24,7 +24,19 @@ export type ReportChangeType =
 
 export interface User {
   id: string;
-  azureAdId: string;
+  /** Null until the person's first Azure AD login (matched by email). */
+  azureAdId: string | null;
+  email: string;
+  name: string;
+  department: string;
+  role: UserRole;
+  /** Soft-delete flag. Inactive users can't sign in or be selected. */
+  isActive: boolean;
+  managerId: string | null;
+}
+
+/** Input for creating a new user (azureAdId is set later, on first AD login). */
+export interface CreateUserInput {
   email: string;
   name: string;
   department: string;

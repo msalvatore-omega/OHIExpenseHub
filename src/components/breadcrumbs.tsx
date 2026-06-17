@@ -42,7 +42,6 @@ const TRAILS: { pattern: string; crumbs: Crumb[] }[] = [
     pattern: "/approvals/:id",
     crumbs: [{ label: "Approvals", href: "/approvals" }, { label: REPORT }],
   },
-  { pattern: "/outbox", crumbs: [{ label: "Outbox" }] },
   { pattern: "/admin", crumbs: [{ label: "Admin" }] },
   { pattern: "/accounting", crumbs: [{ label: "Reports & Analytics" }] },
   {

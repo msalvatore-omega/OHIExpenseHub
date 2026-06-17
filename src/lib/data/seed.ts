@@ -61,6 +61,7 @@ function buildUsers(): User[] {
       name: "Dana Whitfield",
       department: "Information Technology",
       role: "ADMIN",
+      isActive: true,
       managerId: null,
     },
     {
@@ -70,6 +71,7 @@ function buildUsers(): User[] {
       name: "Marcus Bell",
       department: "Operations",
       role: "APPROVER",
+      isActive: true,
       managerId: U.admin,
     },
     {
@@ -79,6 +81,7 @@ function buildUsers(): User[] {
       name: "Sandra Klein",
       department: "Finance",
       role: "APPROVER",
+      isActive: true,
       managerId: U.admin,
     },
     {
@@ -88,6 +91,7 @@ function buildUsers(): User[] {
       name: "Priya Raman",
       department: "Operations",
       role: "SUBMITTER",
+      isActive: true,
       managerId: U.approver1,
     },
     {
@@ -97,6 +101,7 @@ function buildUsers(): User[] {
       name: "Leah Gonzalez",
       department: "Finance",
       role: "SUBMITTER",
+      isActive: true,
       managerId: U.approver2,
     },
     {
@@ -106,6 +111,7 @@ function buildUsers(): User[] {
       name: "Tom Becker",
       department: "Finance",
       role: "ACCOUNTING",
+      isActive: true,
       managerId: U.approver2,
     },
   ];

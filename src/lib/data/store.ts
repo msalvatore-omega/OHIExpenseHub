@@ -46,8 +46,11 @@ function persist(): void {
 export function getDb(): Database {
   if (db) return db;
   db = loadFromStorage() ?? createSeedData();
-  // Forward-compat: older persisted snapshots predate some collections.
+  // Forward-compat: older persisted snapshots predate some collections/fields.
   if (!db.changeLogs) db.changeLogs = [];
+  for (const u of db.users) {
+    if (u.isActive === undefined) u.isActive = true;
+  }
   persist();
   return db;
 }
@@ -86,12 +89,44 @@ export function listUsers() {
   return getDb().users;
 }
 
+export function insertUser(user: User): User {
+  getDb().users.push(user);
+  persist();
+  return user;
+}
+
 export function patchUser(id: string, patch: Partial<User>): User | undefined {
   const user = getDb().users.find((u) => u.id === id);
   if (!user) return undefined;
   Object.assign(user, patch);
   persist();
   return user;
+}
+
+/** Hard-remove a user row. Caller must ensure there are no related records. */
+export function removeUser(id: string): boolean {
+  const data = getDb();
+  const exists = data.users.some((u) => u.id === id);
+  data.users = data.users.filter((u) => u.id !== id);
+  persist();
+  return exists;
+}
+
+/**
+ * Whether a user is referenced by any report, approval-history entry, delegate
+ * record, or change-log entry — i.e. whether a hard delete would orphan data.
+ */
+export function userHasRelations(id: string): boolean {
+  const data = getDb();
+  return (
+    data.reports.some(
+      (r) =>
+        r.submitterId === id || r.onBehalfOfId === id || r.paidToId === id
+    ) ||
+    data.approvalHistory.some((h) => h.approverId === id) ||
+    data.delegates.some((d) => d.principalId === id || d.delegateId === id) ||
+    data.changeLogs.some((c) => c.changedById === id)
+  );
 }
 
 export function listExpenseTypes() {
