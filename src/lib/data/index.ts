@@ -101,6 +101,40 @@ function userName(id: string | undefined): string {
   return userById(id)?.name ?? "—";
 }
 
+/**
+ * The person whose expenses a report represents — the payee. Approval routing
+ * follows this person's chain, not the (possibly delegate) submitter's.
+ */
+function payeeId(report: ExpenseReport): string {
+  return report.onBehalfOfId ?? report.submitterId;
+}
+
+/**
+ * The payee's configured approver chain as an ordered list of user ids, with
+ * unconfigured (null) steps skipped. Empty when the payee has no approvers.
+ */
+function approverChain(report: ExpenseReport): string[] {
+  const payee = userById(payeeId(report));
+  if (!payee) return [];
+  return [payee.approver1Id, payee.approver2Id, payee.approver3Id].filter(
+    (id): id is string => Boolean(id)
+  );
+}
+
+/**
+ * The approver a report should first route to on submit: the head of the
+ * payee's chain, or the fallback (payee's manager, else the first ADMIN).
+ */
+function firstApproverFor(report: ExpenseReport): User | undefined {
+  const chain = approverChain(report);
+  if (chain.length) return userById(chain[0]);
+  const payee = userById(payeeId(report));
+  return (
+    userById(payee?.managerId ?? undefined) ??
+    listUsers().find((u) => u.role === "ADMIN")
+  );
+}
+
 /** The approver currently/most-recently associated with a report. */
 function currentApproverId(report: ExpenseReport): string | undefined {
   const history = listApprovalHistory(report.id);
@@ -110,7 +144,7 @@ function currentApproverId(report: ExpenseReport): string | undefined {
   if (decision) return decision.approverId;
   const pending = [...history].reverse().find((h) => h.action === "PENDING");
   if (pending) return pending.approverId;
-  return userById(report.submitterId)?.managerId ?? undefined;
+  return firstApproverFor(report)?.id;
 }
 
 /** The approver a report is currently waiting on (only meaningful while open). */
@@ -121,16 +155,20 @@ function pendingApproverId(report: ExpenseReport): string | undefined {
   return pending?.approverId;
 }
 
-/** Human-readable workflow step, e.g. "1 of 1". */
+/** Human-readable workflow step, e.g. "Approver 1 of 2". */
 function stepLabel(report: ExpenseReport): string {
   const history = listApprovalHistory(report.id);
-  const total = Math.max(1, new Set(history.map((h) => h.approverId)).size);
-  const decisions = history.filter(
-    (h) => h.action === "APPROVED" || h.action === "REJECTED"
-  ).length;
+  // Total steps governed by the payee's chain, but never fewer than the
+  // approvers actually recorded (covers fallback + legacy single-step routing).
+  const total = Math.max(
+    1,
+    approverChain(report).length,
+    new Set(history.map((h) => h.approverId)).size
+  );
+  const approvals = history.filter((h) => h.action === "APPROVED").length;
   const open = report.status === "SUBMITTED" || report.status === "IN_REVIEW";
-  const current = open ? Math.min(decisions + 1, total) : total;
-  return `${current} of ${total}`;
+  const current = open ? Math.min(approvals + 1, total) : total;
+  return `Approver ${current} of ${total}`;
 }
 
 function involvesUser(report: ExpenseReport, userId: string): boolean {
@@ -552,11 +590,10 @@ export async function submitReport(id: string): Promise<ApprovalActionResult> {
     submittedAt: timestamp,
   })!;
 
-  // Approver = submitter's manager; fall back to the first ADMIN.
+  // Route to the head of the payee's approver chain; fall back to the payee's
+  // manager, then the first ADMIN.
   const submitter = userById(report.submitterId);
-  const approver =
-    userById(submitter?.managerId ?? undefined) ??
-    listUsers().find((u) => u.role === "ADMIN");
+  const approver = firstApproverFor(report);
 
   const notifications: MockEmail[] = [];
   if (approver) {
@@ -599,7 +636,50 @@ export async function approveReport(
     comment,
     createdAt: timestamp,
   });
+
+  // Advance to the next configured approver in the payee's chain (null steps
+  // already skipped). When the current approver isn't in the chain (fallback
+  // routing), there is no next step and the report finalizes.
+  const chain = approverChain(report);
+  const idx = chain.indexOf(approverId);
+  const nextApprover =
+    idx >= 0 && idx + 1 < chain.length
+      ? userById(chain[idx + 1])
+      : undefined;
+
   const prevStatus = report.status;
+  const notifications: MockEmail[] = [];
+
+  if (nextApprover) {
+    // More approvers remain — keep the report open and route onward.
+    const updated = patchReport(id, { status: "IN_REVIEW" })!;
+    insertApprovalHistory({
+      id: newId("history"),
+      reportId: id,
+      approverId: nextApprover.id,
+      action: "PENDING",
+      createdAt: timestamp,
+    });
+    if (prevStatus !== "IN_REVIEW") {
+      recordChange(
+        id,
+        approverId,
+        "STATUS",
+        `Status changed from ${STATUS_LABEL[prevStatus]} to ${STATUS_LABEL.IN_REVIEW}`,
+        { field: "status", oldValue: prevStatus, newValue: "IN_REVIEW" }
+      );
+    }
+    notifications.push(
+      sendMockEmail(
+        nextApprover.email,
+        `Action Required: ${report.reportName} needs your approval`,
+        `${submitter?.name ?? "A submitter"} submitted an expense report (${report.reportName}) totaling ${currency(updated.totalAmount)} for your approval.`
+      )
+    );
+    return { report: updated, notifications };
+  }
+
+  // Last approver in the chain — finalize and hand off to accounting.
   const updated = patchReport(id, { status: "APPROVED" })!;
   recordChange(
     id,
@@ -609,7 +689,6 @@ export async function approveReport(
     { field: "status", oldValue: prevStatus, newValue: "APPROVED" }
   );
 
-  const notifications: MockEmail[] = [];
   const recipient = userById(report.paidToId) ?? submitter;
   if (recipient) {
     notifications.push(
@@ -1053,6 +1132,10 @@ export async function createUser(input: CreateUserInput): Promise<User> {
     role: input.role,
     isActive: true,
     managerId: input.managerId || null,
+    // Approver chain is configured later via the admin user edit dialog.
+    approver1Id: null,
+    approver2Id: null,
+    approver3Id: null,
   });
 }
 

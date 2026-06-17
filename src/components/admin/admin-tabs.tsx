@@ -90,6 +90,14 @@ function UsersTab() {
   const activeUsers = all.filter((u) => u.isActive);
   const nameById = new Map(all.map((u) => [u.id, u.name]));
 
+  // "#1 → #2 → #3" of configured approvers, by name (skips unset steps).
+  const approverChainLabel = (u: User) => {
+    const names = [u.approver1Id, u.approver2Id, u.approver3Id]
+      .filter((id): id is string => Boolean(id))
+      .map((id) => nameById.get(id) ?? "—");
+    return names.length ? names.join(" → ") : "—";
+  };
+
   const invalidate = () => qc.invalidateQueries({ queryKey: ["users"] });
 
   return (
@@ -109,6 +117,7 @@ function UsersTab() {
               <TableHead>Department</TableHead>
               <TableHead>Role</TableHead>
               <TableHead>Manager</TableHead>
+              <TableHead>Approvers</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
@@ -121,6 +130,9 @@ function UsersTab() {
                 <TableCell>{u.role}</TableCell>
                 <TableCell>
                   {u.managerId ? nameById.get(u.managerId) ?? "—" : "—"}
+                </TableCell>
+                <TableCell className="text-sm text-muted-foreground">
+                  {approverChainLabel(u)}
                 </TableCell>
                 <TableCell>
                   <StatusIndicator active={u.isActive} />
@@ -432,6 +444,37 @@ function DeleteUserDialog({
   );
 }
 
+/** A clearable people picker for a single approver-chain slot. */
+function ApproverPicker({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: User[];
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+      {label}
+      <select
+        className={SELECT_CLASS}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      >
+        <option value="">— None —</option>
+        {options.map((u) => (
+          <option key={u.id} value={u.id}>
+            {u.name}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
 function EditUserDialog({
   user,
   users,
@@ -445,18 +488,33 @@ function EditUserDialog({
 }) {
   const [role, setRole] = React.useState<UserRole>("SUBMITTER");
   const [managerId, setManagerId] = React.useState<string>("");
+  const [approver1Id, setApprover1Id] = React.useState<string>("");
+  const [approver2Id, setApprover2Id] = React.useState<string>("");
+  const [approver3Id, setApprover3Id] = React.useState<string>("");
 
   React.useEffect(() => {
     if (user) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setRole(user.role);
       setManagerId(user.managerId ?? "");
+      setApprover1Id(user.approver1Id ?? "");
+      setApprover2Id(user.approver2Id ?? "");
+      setApprover3Id(user.approver3Id ?? "");
     }
   }, [user]);
 
+  // Eligible approvers: active users other than the user being edited.
+  const approverOptions = users.filter((u) => u.id !== user?.id);
+
   const mutation = useMutation({
     mutationFn: () =>
-      updateUser(user!.id, { role, managerId: managerId || null }),
+      updateUser(user!.id, {
+        role,
+        managerId: managerId || null,
+        approver1Id: approver1Id || null,
+        approver2Id: approver2Id || null,
+        approver3Id: approver3Id || null,
+      }),
     onSuccess: () => {
       toast.success("User updated");
       onSaved();
@@ -493,15 +551,41 @@ function EditUserDialog({
               onChange={(e) => setManagerId(e.target.value)}
             >
               <option value="">— None —</option>
-              {users
-                .filter((u) => u.id !== user?.id)
-                .map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.name}
-                  </option>
-                ))}
+              {approverOptions.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.name}
+                </option>
+              ))}
             </select>
           </label>
+
+          <div className="flex flex-col gap-2 rounded-lg border border-border p-3">
+            <p className="text-xs font-medium text-muted-foreground">
+              Approval chain
+            </p>
+            <ApproverPicker
+              label="Approver #1"
+              value={approver1Id}
+              options={approverOptions}
+              onChange={setApprover1Id}
+            />
+            <ApproverPicker
+              label="Approver #2 (optional)"
+              value={approver2Id}
+              options={approverOptions}
+              onChange={setApprover2Id}
+            />
+            <ApproverPicker
+              label="Approver #3 (optional)"
+              value={approver3Id}
+              options={approverOptions}
+              onChange={setApprover3Id}
+            />
+            <p className="text-xs text-muted-foreground">
+              Approvals route through these in order, skipping any left empty. If
+              none are set, routing falls back to the user&apos;s manager.
+            </p>
+          </div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>

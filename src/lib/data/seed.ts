@@ -63,6 +63,9 @@ function buildUsers(): User[] {
       role: "ADMIN",
       isActive: true,
       managerId: null,
+      approver1Id: null,
+      approver2Id: null,
+      approver3Id: null,
     },
     {
       id: U.approver1,
@@ -73,6 +76,9 @@ function buildUsers(): User[] {
       role: "APPROVER",
       isActive: true,
       managerId: U.admin,
+      approver1Id: null,
+      approver2Id: null,
+      approver3Id: null,
     },
     {
       id: U.approver2,
@@ -83,6 +89,9 @@ function buildUsers(): User[] {
       role: "APPROVER",
       isActive: true,
       managerId: U.admin,
+      approver1Id: null,
+      approver2Id: null,
+      approver3Id: null,
     },
     {
       id: U.submitter1,
@@ -93,6 +102,10 @@ function buildUsers(): User[] {
       role: "SUBMITTER",
       isActive: true,
       managerId: U.approver1,
+      // Two-step chain: Marcus then Sandra (note Sandra is not Priya's manager).
+      approver1Id: U.approver1,
+      approver2Id: U.approver2,
+      approver3Id: null,
     },
     {
       id: U.submitter2,
@@ -103,6 +116,10 @@ function buildUsers(): User[] {
       role: "SUBMITTER",
       isActive: true,
       managerId: U.approver2,
+      // Single-step chain: Sandra approves on her own.
+      approver1Id: U.approver2,
+      approver2Id: null,
+      approver3Id: null,
     },
     {
       id: U.accounting,
@@ -113,6 +130,9 @@ function buildUsers(): User[] {
       role: "ACCOUNTING",
       isActive: true,
       managerId: U.approver2,
+      approver1Id: null,
+      approver2Id: null,
+      approver3Id: null,
     },
   ];
 }

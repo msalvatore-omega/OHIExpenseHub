@@ -50,6 +50,9 @@ export function getDb(): Database {
   if (!db.changeLogs) db.changeLogs = [];
   for (const u of db.users) {
     if (u.isActive === undefined) u.isActive = true;
+    if (u.approver1Id === undefined) u.approver1Id = null;
+    if (u.approver2Id === undefined) u.approver2Id = null;
+    if (u.approver3Id === undefined) u.approver3Id = null;
   }
   for (const r of db.receipts) {
     if (r.uploadedById === undefined) r.uploadedById = r.userId;

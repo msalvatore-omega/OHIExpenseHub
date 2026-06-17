@@ -33,6 +33,14 @@ export interface User {
   /** Soft-delete flag. Inactive users can't sign in or be selected. */
   isActive: boolean;
   managerId: string | null;
+  /**
+   * Per-user approval chain (up to 3 steps), independent of managerId. Approvals
+   * for a report route through the PAYEE's chain, skipping null steps. When all
+   * three are null, routing falls back to managerId, then the first ADMIN.
+   */
+  approver1Id: string | null;
+  approver2Id: string | null;
+  approver3Id: string | null;
 }
 
 /** Input for creating a new user (azureAdId is set later, on first AD login). */

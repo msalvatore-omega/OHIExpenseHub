@@ -56,6 +56,20 @@ model User {
   manager     User?    @relation("UserManager", fields: [managerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   reports     User[]   @relation("UserManager")
 
+  // Per-user approval chain (up to 3 steps). Independent of managerId: an
+  // approver need not be the user's manager. Each is a distinct self-relation so
+  // Prisma can disambiguate the multiple User -> User links.
+  approver1Id String?
+  approver1   User?    @relation("UserApprover1", fields: [approver1Id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  approver2Id String?
+  approver2   User?    @relation("UserApprover2", fields: [approver2Id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  approver3Id String?
+  approver3   User?    @relation("UserApprover3", fields: [approver3Id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  // Back-relations: users who name this user as a given approver step.
+  approverFor1 User[]  @relation("UserApprover1")
+  approverFor2 User[]  @relation("UserApprover2")
+  approverFor3 User[]  @relation("UserApprover3")
+
   submittedReports ExpenseReport[]   @relation("ReportSubmitter")
   paidReports      ExpenseReport[]   @relation("ReportPayee")
   reportChanges    ReportChangeLog[] @relation("ChangeAuthor")
