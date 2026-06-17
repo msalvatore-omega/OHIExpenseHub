@@ -11,9 +11,10 @@ import { usePathname, useRouter } from "next/navigation";
 import { LogOut, MoreHorizontal, PanelLeft, PanelLeftClose } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { APP_NAME, BRAND_BLUE } from "@/lib/constants";
+import { APP_NAME } from "@/lib/constants";
 import { useSession } from "@/lib/auth/mock-session";
 import { visibleNavItems, type NavItem } from "@/lib/nav";
+import { BrandLogo } from "@/components/brand-logo";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -48,14 +49,7 @@ function useActive() {
 }
 
 function BrandMark() {
-  return (
-    <div
-      className="flex size-8 shrink-0 items-center justify-center rounded-md text-xs font-bold text-white"
-      style={{ backgroundColor: BRAND_BLUE }}
-    >
-      OHI
-    </div>
-  );
+  return <BrandLogo className="size-8 shrink-0" />;
 }
 
 export function AppShell({ children }: { children: React.ReactNode }) {

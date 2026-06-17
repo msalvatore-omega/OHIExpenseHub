@@ -19,6 +19,7 @@ import {
 } from "@/lib/data";
 import type { ExpenseLineItem } from "@/lib/types";
 import { Button } from "@/components/ui/button";
+import { BrandLogo } from "@/components/brand-logo";
 import { ReceiptThumb } from "@/components/reports/receipt-thumb";
 
 const ACTION_LABEL = {
@@ -129,9 +130,7 @@ export function ReportPrintView({ reportId }: { reportId: string }) {
           <p className="text-sm text-muted-foreground">{APP_NAME}</p>
         </div>
         <div className="flex items-center gap-2">
-          <div className="flex size-11 items-center justify-center rounded-md bg-primary text-sm font-bold text-primary-foreground">
-            OHI
-          </div>
+          <BrandLogo className="size-12" />
           <span className="text-sm font-semibold leading-tight">
             OHI Expense
             <br />

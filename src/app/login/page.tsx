@@ -5,8 +5,9 @@
 
 import { useRouter } from "next/navigation";
 
-import { APP_NAME, BRAND_BLUE } from "@/lib/constants";
+import { APP_NAME } from "@/lib/constants";
 import { useSession } from "@/lib/auth/mock-session";
+import { BrandLogo } from "@/components/brand-logo";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -41,12 +42,7 @@ export default function LoginPage() {
     <main className="flex flex-1 items-center justify-center px-6 py-16">
       <Card className="w-full max-w-sm">
         <CardHeader className="items-center text-center">
-          <div
-            className="mb-3 flex size-14 items-center justify-center rounded-xl text-lg font-bold tracking-wide text-white"
-            style={{ backgroundColor: BRAND_BLUE }}
-          >
-            OHI
-          </div>
+          <BrandLogo className="mb-3 size-16" />
           <CardTitle className="text-xl">{APP_NAME}</CardTitle>
           <CardDescription>Employee expense management</CardDescription>
         </CardHeader>

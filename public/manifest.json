@@ -1,24 +1,18 @@
 {
   "name": "OHI Expense Hub",
   "short_name": "OHI Expense",
-  "description": "Employee expense management — prototype",
-  "display": "standalone",
+  "description": "Employee expense management with AI-assisted receipt processing.",
+  "id": "/",
   "start_url": "/",
   "scope": "/",
-  "theme_color": "#1F4E79",
+  "display": "standalone",
+  "orientation": "portrait",
   "background_color": "#ffffff",
+  "theme_color": "#1f3a93",
   "icons": [
-    {
-      "src": "/icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "/icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any maskable"
-    }
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-192-maskable.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icons/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ]
 }
