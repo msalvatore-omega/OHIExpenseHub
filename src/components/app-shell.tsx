@@ -21,6 +21,7 @@ import { APP_NAME } from "@/lib/constants";
 import { useSession } from "@/lib/auth/mock-session";
 import { visibleNavItems, type NavItem } from "@/lib/nav";
 import { BrandLogo } from "@/components/brand-logo";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -84,6 +85,8 @@ function DesktopSidebar({ items }: { items: NavItem[] }) {
 
   React.useEffect(() => {
     try {
+      // Hydrate the collapsed pref after mount (localStorage is client-only).
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setCollapsed(
         window.localStorage.getItem(SIDEBAR_STORAGE_KEY) === "true"
       );
@@ -192,6 +195,7 @@ function DesktopSidebar({ items }: { items: NavItem[] }) {
             </div>
           )}
         </div>
+        <ThemeToggle collapsed={collapsed} />
         <Button
           variant="ghost"
           onClick={() => router.push("/login")}
@@ -227,6 +231,7 @@ function SidebarGroup({
 
   // Auto-expand the group whenever one of its child routes becomes active.
   React.useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (childActive) setOpen(true);
   }, [childActive]);
 
