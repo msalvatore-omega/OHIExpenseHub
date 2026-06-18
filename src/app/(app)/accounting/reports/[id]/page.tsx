@@ -3,7 +3,6 @@ import { ArrowLeft } from "lucide-react";
 
 import { ReportDetailView } from "@/components/reports/report-detail-view";
 import { ReportExportButtons } from "@/components/reports/report-export-buttons";
-import { ReportStatusSelect } from "@/components/reports/report-status-select";
 import { RoleGuard } from "@/components/role-guard";
 
 // Next 16: dynamic route params are async.
@@ -26,12 +25,7 @@ export default async function AccountingReportDetailPage({
       </div>
       <ReportDetailView
         reportId={id}
-        actions={
-          <>
-            <ReportStatusSelect reportId={id} />
-            <ReportExportButtons reportId={id} />
-          </>
-        }
+        actions={<ReportExportButtons reportId={id} />}
       />
     </RoleGuard>
   );

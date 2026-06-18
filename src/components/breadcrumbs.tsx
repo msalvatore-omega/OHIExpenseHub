@@ -43,6 +43,13 @@ const TRAILS: { pattern: string; crumbs: Crumb[] }[] = [
     crumbs: [{ label: "Approvals", href: "/approvals" }, { label: REPORT }],
   },
   { pattern: "/admin", crumbs: [{ label: "Admin" }] },
+  {
+    pattern: "/admin/expense-reports",
+    crumbs: [
+      { label: "Admin", href: "/admin" },
+      { label: "Expense Reports" },
+    ],
+  },
   { pattern: "/accounting", crumbs: [{ label: "Accounting" }] },
   {
     pattern: "/accounting/analytics",

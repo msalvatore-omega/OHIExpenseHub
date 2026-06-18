@@ -47,8 +47,8 @@ import type {
   ReportStatus,
   User,
 } from "@/lib/types";
-import { ReportStatusSelect } from "@/components/reports/report-status-select";
 import { ChangeHistoryDialog } from "@/components/reports/report-change-history";
+import { StatusPill } from "@/components/status-pill";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -442,11 +442,8 @@ function ReportsTab({
                 <TableCell className="text-right tabular-nums">
                   {formatCurrency(report.totalAmount)}
                 </TableCell>
-                <TableCell onClick={(e) => e.stopPropagation()}>
-                  <ReportStatusSelect
-                    reportId={report.id}
-                    status={report.status}
-                  />
+                <TableCell>
+                  <StatusPill status={report.status} />
                 </TableCell>
                 <RowActionCells
                   report={report}

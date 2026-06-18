@@ -69,6 +69,7 @@ export const NAV_ITEMS: NavItem[] = [
       { label: "Delegates", href: "/admin/delegates", icon: UserCheck },
       { label: "Expense Types", href: "/admin/expense-types", icon: Tag },
       { label: "Approval Groups", href: "/admin/approval-groups", icon: Network },
+      { label: "Expense Reports", href: "/admin/expense-reports", icon: FileText },
       { label: "System", href: "/admin/system", icon: Settings },
     ],
   },

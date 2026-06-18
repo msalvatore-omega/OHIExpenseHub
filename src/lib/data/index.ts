@@ -1536,6 +1536,95 @@ export async function updateExpenseType(
   return type;
 }
 
+export async function adminChangeReportStatus(
+  id: string,
+  actorId: string,
+  status: ReportStatus,
+  reason: string
+): Promise<ApprovalActionResult> {
+  await delay();
+  const actor = userById(actorId);
+  if (actor?.role !== "ADMIN") throw new ForbiddenError("Admin access required.");
+  const report = findReport(id);
+  if (!report) throw new Error(`Report ${id} not found`);
+
+  const prevStatus = report.status;
+  if (prevStatus === status) return { report, notifications: [] };
+
+  const updated = patchReport(id, { status })!;
+  recordChange(id, actorId, "STATUS", "Status changed by admin", {
+    field: "status",
+    oldValue: prevStatus,
+    newValue: status,
+    note: reason,
+  });
+
+  const notifications: MockEmail[] = [];
+  const submitter = userById(report.submitterId);
+  if (submitter) {
+    notifications.push(
+      sendMockEmail(
+        submitter.email,
+        `Report Status Updated: ${report.reportName}`,
+        `Your expense report "${report.reportName}" status has been changed to ${STATUS_LABEL[status]} by an administrator.\n\nReason: ${reason}`
+      )
+    );
+  }
+  return { report: updated, notifications };
+}
+
+export async function adminDeleteReport(
+  id: string,
+  actorId: string,
+  reason?: string
+): Promise<{ receiptsReturned: number; notifications: MockEmail[] }> {
+  await delay();
+  const actor = userById(actorId);
+  if (actor?.role !== "ADMIN") throw new ForbiddenError("Admin access required.");
+  const report = findReport(id);
+  if (!report) throw new Error(`Report ${id} not found`);
+  if (report.status !== "DRAFT") throw new ConflictError("Only draft reports can be deleted.");
+
+  const returned = new Set<string>();
+  for (const li of listLineItems(id)) {
+    if (!li.receiptId || returned.has(li.receiptId)) continue;
+    const receipt = findReceipt(li.receiptId);
+    if (receipt?.isAttached) {
+      patchReceipt(li.receiptId, { isAttached: false });
+      returned.add(li.receiptId);
+    }
+  }
+
+  const reasonText = reason ? `\n\nReason: ${reason}` : "";
+  const notifications: MockEmail[] = [];
+  const submitter = userById(report.submitterId);
+  if (submitter) {
+    notifications.push(
+      sendMockEmail(
+        submitter.email,
+        `Draft Deleted: ${report.reportName}`,
+        `Your draft expense report "${report.reportName}" has been deleted by an administrator.${reasonText}`
+      )
+    );
+  }
+  if (report.paidToId && report.paidToId !== report.submitterId) {
+    const payee = userById(report.paidToId);
+    if (payee) {
+      notifications.push(
+        sendMockEmail(
+          payee.email,
+          `Draft Deleted: ${report.reportName}`,
+          `The draft expense report "${report.reportName}" intended for you has been deleted by an administrator.${reasonText}`
+        )
+      );
+    }
+  }
+
+  const ok = removeReport(id);
+  if (!ok) throw new Error(`Report ${id} not found`);
+  return { receiptsReturned: returned.size, notifications };
+}
+
 // ---- Mock email outbox ----
 
 export async function getOutbox(): Promise<MockEmail[]> {
