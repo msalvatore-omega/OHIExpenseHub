@@ -1,14 +1,12 @@
 "use client";
 
 // Primary dashboard actions. New Expense creates a draft then routes to its
-// editor; Photo quick-captures a receipt into the gallery; My Expenses and
-// Approvals open slide-over Sheets; Receipt Gallery navigates. On mobile the
-// Approvals tile is hidden (desktop keeps all five).
+// editor; Photo quick-captures a receipt into the gallery; My Expenses opens
+// a slide-over Sheet; Receipt Gallery navigates.
 
 import { useRouter } from "next/navigation";
 import { useMutation } from "@tanstack/react-query";
 import {
-  ClipboardCheck,
   FilePlus2,
   Images,
   Loader2,
@@ -19,9 +17,8 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/format";
 import { createDraft } from "@/lib/data";
-import type { ExpenseReport, ReportRoutingRow } from "@/lib/types";
+import type { ExpenseReport } from "@/lib/types";
 import {
-  useApprovalQueue,
   useInvalidateDashboard,
   useMyReports,
 } from "@/components/dashboard/use-dashboard-data";
@@ -73,7 +70,7 @@ export function ActionButtons({ userId }: { userId: string }) {
   });
 
   return (
-    <section className="grid grid-cols-2 gap-3 md:grid-cols-5">
+    <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
       {/* New Expense — primary action (solid deep blue) */}
       <button
         type="button"
@@ -114,28 +111,6 @@ export function ActionButtons({ userId }: { userId: string }) {
             <SheetDescription>All of your expense reports.</SheetDescription>
           </SheetHeader>
           <MyExpensesList userId={userId} />
-        </SheetContent>
-      </Sheet>
-
-      {/* Approvals (secondary) — desktop only */}
-      <Sheet>
-        <SheetTrigger
-          render={
-            <button
-              type="button"
-              className={cn(TILE_BASE, TILE_SECONDARY, "hidden md:flex")}
-            />
-          }
-        >
-          <ClipboardCheck className="size-5" />
-          Approvals
-        </SheetTrigger>
-        <SheetContent side="right" className="w-full sm:max-w-md">
-          <SheetHeader>
-            <SheetTitle>Approvals</SheetTitle>
-            <SheetDescription>Reports needing your action.</SheetDescription>
-          </SheetHeader>
-          <ApprovalsList userId={userId} />
         </SheetContent>
       </Sheet>
 
@@ -205,30 +180,3 @@ function MyExpensesList({ userId }: { userId: string }) {
   );
 }
 
-function ApprovalsList({ userId }: { userId: string }) {
-  const queue = useApprovalQueue(userId);
-  const rows: ReportRoutingRow[] = queue.data ?? [];
-
-  if (queue.isLoading) return <ListSkeleton />;
-  if (rows.length === 0)
-    return <SheetEmpty message="Nothing awaiting your action." />;
-
-  return (
-    <ul className="flex flex-col gap-2 overflow-y-auto px-4 pb-4">
-      {rows.map(({ report, submitterName }) => (
-        <li
-          key={report.id}
-          className="flex items-center justify-between gap-3 rounded-lg border border-border p-3"
-        >
-          <div className="min-w-0">
-            <p className="truncate text-sm font-medium">{report.reportName}</p>
-            <p className="text-xs text-muted-foreground">
-              {submitterName} · {formatCurrency(report.totalAmount)}
-            </p>
-          </div>
-          <StatusPill status={report.status} />
-        </li>
-      ))}
-    </ul>
-  );
-}
