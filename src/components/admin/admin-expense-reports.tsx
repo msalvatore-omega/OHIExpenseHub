@@ -377,14 +377,15 @@ export function AdminExpenseReports() {
               <SortableHeader label="Period" sortKey="period" sort={sort} onSort={onSort} />
               <SortableHeader label="Total" sortKey="total" sort={sort} onSort={onSort} align="right" />
               <SortableHeader label="Status" sortKey="status" sort={sort} onSort={onSort} />
-              <TableHead className="text-center">Actions</TableHead>
+              <TableHead className="w-14" />
+              <TableHead className="w-14" />
             </TableRow>
           </TableHeader>
           <TableBody>
             {reports.isLoading ? (
               Array.from({ length: 4 }).map((_, i) => (
                 <TableRow key={i}>
-                  {Array.from({ length: 9 }).map((__, j) => (
+                  {Array.from({ length: 10 }).map((__, j) => (
                     <TableCell key={j}>
                       <Skeleton className="h-4 w-full" />
                     </TableCell>
@@ -394,7 +395,7 @@ export function AdminExpenseReports() {
             ) : rows.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={9}
+                  colSpan={10}
                   className="h-24 text-center text-sm text-muted-foreground"
                 >
                   No reports match the current filters.
@@ -426,39 +427,42 @@ export function AdminExpenseReports() {
                       <StatusPill status={report.status} />
                     </TableCell>
                     <TableCell
-                      className="text-center"
+                      className="w-14 p-1 text-center"
                       onClick={(e) => e.stopPropagation()}
                     >
-                      <div className="flex items-center justify-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        title="Change status"
+                        aria-label="Change status"
+                        onClick={() => {
+                          setChangingRow(row);
+                          setNewStatus(report.status);
+                          setChangeReason("");
+                        }}
+                      >
+                        <Edit2 className="size-4" />
+                      </Button>
+                    </TableCell>
+                    <TableCell
+                      className="w-14 p-1 text-center"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {report.status === "DRAFT" && (
                         <Button
                           variant="ghost"
                           size="icon-sm"
-                          title="Change status"
-                          aria-label="Change status"
+                          title="Delete draft"
+                          aria-label="Delete draft"
+                          className="text-muted-foreground hover:text-destructive"
                           onClick={() => {
-                            setChangingRow(row);
-                            setNewStatus(report.status);
-                            setChangeReason("");
+                            setDeletingRow(row);
+                            setDeleteReason("");
                           }}
                         >
-                          <Edit2 className="size-4" />
+                          <Trash2 className="size-4" />
                         </Button>
-                        {report.status === "DRAFT" && (
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            title="Delete draft"
-                            aria-label="Delete draft"
-                            className="text-muted-foreground hover:text-destructive"
-                            onClick={() => {
-                              setDeletingRow(row);
-                              setDeleteReason("");
-                            }}
-                          >
-                            <Trash2 className="size-4" />
-                          </Button>
-                        )}
-                      </div>
+                      )}
                     </TableCell>
                   </TableRow>
                 );

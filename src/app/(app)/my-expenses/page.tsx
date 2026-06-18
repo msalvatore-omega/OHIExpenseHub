@@ -5,7 +5,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { FilePlus2, Loader2, Trash2 } from "lucide-react";
+import { FilePlus2, Loader2, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { cn } from "@/lib/utils";
@@ -121,14 +121,15 @@ export default function MyExpensesPage() {
               <TableHead>Period</TableHead>
               <TableHead className="text-right">Total</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
+              <TableHead className="w-14" />
+              <TableHead className="w-14" />
             </TableRow>
           </TableHeader>
           <TableBody>
             {reportsQuery.isLoading ? (
               Array.from({ length: 4 }).map((_, i) => (
                 <TableRow key={i}>
-                  {Array.from({ length: 5 }).map((__, j) => (
+                  {Array.from({ length: 6 }).map((__, j) => (
                     <TableCell key={j}>
                       <Skeleton className="h-4 w-full" />
                     </TableCell>
@@ -138,7 +139,7 @@ export default function MyExpensesPage() {
             ) : visible.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={5}
+                  colSpan={6}
                   className="h-24 text-center text-sm text-muted-foreground"
                 >
                   {reports.length === 0
@@ -159,36 +160,37 @@ export default function MyExpensesPage() {
                   <TableCell>
                     <StatusPill status={r.status} />
                   </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-1">
+                  <TableCell className="w-14 p-1 text-center">
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      nativeButton={false}
+                      aria-label={r.status === "DRAFT" ? `Edit ${r.reportName}` : `View ${r.reportName}`}
+                      render={
+                        <Link
+                          href={
+                            r.status === "DRAFT"
+                              ? `/reports/${r.id}/edit`
+                              : `/reports/${r.id}/view`
+                          }
+                        />
+                      }
+                    >
+                      <Pencil className="size-4" />
+                    </Button>
+                  </TableCell>
+                  <TableCell className="w-14 p-1 text-center">
+                    {r.status === "DRAFT" && (
                       <Button
-                        variant="outline"
-                        size="sm"
-                        nativeButton={false}
-                        render={
-                          <Link
-                            href={
-                              r.status === "DRAFT"
-                                ? `/reports/${r.id}/edit`
-                                : `/reports/${r.id}/view`
-                            }
-                          />
-                        }
+                        variant="ghost"
+                        size="icon-sm"
+                        className="text-muted-foreground hover:text-destructive"
+                        onClick={() => setDeleting(r)}
+                        aria-label={`Delete ${r.reportName}`}
                       >
-                        Open
+                        <Trash2 className="size-4" />
                       </Button>
-                      {r.status === "DRAFT" && (
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          className="text-muted-foreground hover:text-destructive"
-                          onClick={() => setDeleting(r)}
-                          aria-label={`Delete ${r.reportName}`}
-                        >
-                          <Trash2 className="size-4" />
-                        </Button>
-                      )}
-                    </div>
+                    )}
                   </TableCell>
                 </TableRow>
               ))

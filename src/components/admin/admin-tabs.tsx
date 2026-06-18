@@ -147,7 +147,9 @@ export function UsersTab() {
               <TableHead>Approvers</TableHead>
               <TableHead className="text-right">Fast-track</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
+              <TableHead className="w-28" />
+              <TableHead className="w-14" />
+              <TableHead className="w-14" />
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -170,39 +172,41 @@ export function UsersTab() {
                 <TableCell>
                   <StatusIndicator active={u.isActive} />
                 </TableCell>
-                <TableCell className="text-right">
-                  <div className="flex justify-end gap-1">
-                    {!u.isActive && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setReactivating(u)}
-                      >
-                        <UserCheck className="size-4" />
-                        Reactivate
-                      </Button>
-                    )}
+                <TableCell className="w-28 p-1 text-center">
+                  {!u.isActive && (
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => setEditing(u)}
+                      onClick={() => setReactivating(u)}
                     >
-                      Edit
+                      <UserCheck className="size-4" />
+                      Reactivate
                     </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      className="text-muted-foreground hover:text-destructive"
-                      onClick={() => setDeleting(u)}
-                      aria-label={
-                        u.isActive
-                          ? `Deactivate ${u.name}`
-                          : `Delete ${u.name}`
-                      }
-                    >
-                      <Trash2 className="size-4" />
-                    </Button>
-                  </div>
+                  )}
+                </TableCell>
+                <TableCell className="w-14 p-1 text-center">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setEditing(u)}
+                  >
+                    Edit
+                  </Button>
+                </TableCell>
+                <TableCell className="w-14 p-1 text-center">
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="text-muted-foreground hover:text-destructive"
+                    onClick={() => setDeleting(u)}
+                    aria-label={
+                      u.isActive
+                        ? `Deactivate ${u.name}`
+                        : `Delete ${u.name}`
+                    }
+                  >
+                    <Trash2 className="size-4" />
+                  </Button>
                 </TableCell>
               </TableRow>
             ))}
