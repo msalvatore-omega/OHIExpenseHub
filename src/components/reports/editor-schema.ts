@@ -34,7 +34,7 @@ export function makeReportSchema(mileageTypeIds: Set<string>) {
       purposeOfTrip: z.string().min(1, "Required"),
       description: z.string().min(1, "Required"),
       city: z.string().min(1, "Required"),
-      state: z.string().min(1, "Required"),
+      state: z.string(), // optional — not all countries have a structured subdivision
       country: z.string().min(1, "Required"),
       expenseTypeId: z.string().min(1, "Select a type"),
       miles: z.number().positive("Enter miles").optional(),
@@ -75,7 +75,7 @@ export const EMPTY_LINE_ITEM: LineItemForm = {
   description: "",
   city: "",
   state: "",
-  country: "",
+  country: "United States",
   expenseTypeId: "",
   miles: undefined,
   amount: undefined,

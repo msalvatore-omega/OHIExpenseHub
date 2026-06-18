@@ -1,14 +1,21 @@
 "use client";
 
+import * as React from "react";
 import { useFormContext, useWatch } from "react-hook-form";
 import { Trash2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { MILEAGE_RATE } from "@/lib/constants";
 import { formatCurrency } from "@/lib/format";
+import {
+  COUNTRY_ITEMS,
+  getSubdivisions,
+  countryNameToCode,
+} from "@/lib/location-data";
 import type { ExpenseType, Receipt } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CountryCombobox, SubdivisionCombobox } from "@/components/ui/location-combobox";
 import { ReceiptThumb } from "@/components/reports/receipt-thumb";
 import { AttachReceiptDialog } from "@/components/reports/attach-receipt-dialog";
 import type { ReportFormValues } from "@/components/reports/editor-schema";
@@ -73,6 +80,9 @@ export function LineItemCard({
   });
   const miles = useWatch({ control, name: `lineItems.${index}.miles` });
   const receiptId = useWatch({ control, name: `lineItems.${index}.receiptId` });
+  const country = useWatch({ control, name: `lineItems.${index}.country` });
+  const state = useWatch({ control, name: `lineItems.${index}.state` });
+  const cityValue = useWatch({ control, name: `lineItems.${index}.city` });
 
   const isMileage = mileageTypeIds.has(expenseTypeId ?? "");
   const calculated =
@@ -81,10 +91,76 @@ export function LineItemCard({
   const typeReg = register(`lineItems.${index}.expenseTypeId`);
   const attachedReceipt = receiptId ? receiptsById.get(receiptId) : undefined;
 
+  // Derive the ISO alpha-2 country code for subdivision lookup + city API calls.
+  const countryCode = React.useMemo(
+    () => countryNameToCode(country ?? "") ?? "US",
+    [country]
+  );
+  const subdivisions = React.useMemo(
+    () => getSubdivisions(countryCode),
+    [countryCode]
+  );
+
+  // ---- City autocomplete ----
+  const [citySuggestions, setCitySuggestions] = React.useState<string[]>([]);
+  const [showSugg, setShowSugg] = React.useState(false);
+
+  // Simple debounce — 250 ms.
+  const [debouncedCity, setDebouncedCity] = React.useState(cityValue);
+  React.useEffect(() => {
+    const t = setTimeout(() => setDebouncedCity(cityValue), 250);
+    return () => clearTimeout(t);
+  }, [cityValue]);
+
+  React.useEffect(() => {
+    if (!debouncedCity || debouncedCity.length < 2) {
+      setCitySuggestions([]);
+      return;
+    }
+    const controller = new AbortController();
+    const params = new URLSearchParams({ q: debouncedCity, country: countryCode });
+    if (state) params.set("state", state);
+
+    fetch(`/api/locations/cities?${params}`, { signal: controller.signal })
+      .then((r) => (r.ok ? r.json() : { cities: [] }))
+      .then(({ cities }: { cities: string[] }) =>
+        setCitySuggestions(cities ?? [])
+      )
+      .catch(() => {
+        // Abort or network error — silently ignore.
+      });
+
+    return () => controller.abort();
+  }, [debouncedCity, countryCode, state]);
+
+  // ---- Country / state change handlers ----
+
+  function handleCountryChange(name: string) {
+    setValue(`lineItems.${index}.country`, name, { shouldDirty: true });
+    setValue(`lineItems.${index}.state`, "", { shouldDirty: true });
+    setValue(`lineItems.${index}.city`, "", { shouldDirty: true });
+    setCitySuggestions([]);
+  }
+
+  function handleStateChange(v: string) {
+    setValue(`lineItems.${index}.state`, v, { shouldDirty: true });
+    setValue(`lineItems.${index}.city`, "", { shouldDirty: true });
+    setCitySuggestions([]);
+  }
+
+  // Banding: even-indexed cards get the tinted tier; odd get the page default.
+  const isBanded = index % 2 === 0;
+
   return (
-    <div className="rounded-xl border border-border p-4">
-      <div className="mb-3 flex items-center justify-between">
-        <span className="text-sm font-medium">Line {index + 1}</span>
+    <div
+      className={cn(
+        "overflow-hidden rounded-xl border border-border",
+        isBanded ? "bg-table-row-band" : "bg-surface"
+      )}
+    >
+      {/* Card header — darkest tier */}
+      <div className="flex items-center justify-between bg-table-header-band px-4 py-2.5">
+        <span className="text-sm font-semibold">Line {index + 1}</span>
         <Button
           type="button"
           variant="ghost"
@@ -98,7 +174,7 @@ export function LineItemCard({
         </Button>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-3">
         <Field label="Expense Date" required error={errors?.expenseDate?.message}>
           <Input type="date" {...register(`lineItems.${index}.expenseDate`)} />
         </Field>
@@ -113,7 +189,6 @@ export function LineItemCard({
             {...typeReg}
             onChange={(e) => {
               typeReg.onChange(e);
-              // Switching type clears the now-irrelevant numeric field.
               if (mileageTypeIds.has(e.target.value)) {
                 setValue(`lineItems.${index}.amount`, undefined);
               } else {
@@ -147,14 +222,64 @@ export function LineItemCard({
           <Input {...register(`lineItems.${index}.description`)} />
         </Field>
 
-        <Field label="City" required error={errors?.city?.message}>
-          <Input {...register(`lineItems.${index}.city`)} />
-        </Field>
-        <Field label="State" required error={errors?.state?.message}>
-          <Input {...register(`lineItems.${index}.state`)} />
-        </Field>
+        {/* Country */}
         <Field label="Country" required error={errors?.country?.message}>
-          <Input {...register(`lineItems.${index}.country`)} />
+          <CountryCombobox
+            value={country ?? ""}
+            onChange={handleCountryChange}
+            items={COUNTRY_ITEMS}
+          />
+        </Field>
+
+        {/* State / Province / Region */}
+        <Field label={subdivisions ? "State / Province" : "State / Region"}>
+          {subdivisions ? (
+            <SubdivisionCombobox
+              value={state ?? ""}
+              onChange={handleStateChange}
+              options={subdivisions}
+              placeholder="Select…"
+            />
+          ) : (
+            <Input
+              {...register(`lineItems.${index}.state`)}
+              placeholder="Optional"
+            />
+          )}
+        </Field>
+
+        {/* City — text input with async autocomplete */}
+        <Field label="City" required error={errors?.city?.message}>
+          <div className="relative">
+            <Input
+              {...register(`lineItems.${index}.city`)}
+              autoComplete="off"
+              onFocus={() => setShowSugg(true)}
+              onBlur={() => setTimeout(() => setShowSugg(false), 150)}
+            />
+            {showSugg && citySuggestions.length > 0 && (
+              <div className="absolute left-0 right-0 top-full z-50 mt-1 overflow-hidden rounded-lg bg-popover text-popover-foreground shadow-md ring-1 ring-foreground/10">
+                {citySuggestions.map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    className="flex w-full items-center px-3 py-1.5 text-left text-sm transition-colors hover:bg-accent/30"
+                    onMouseDown={(e) => {
+                      // Prevent blur from firing before click is registered.
+                      e.preventDefault();
+                      setValue(`lineItems.${index}.city`, c, {
+                        shouldDirty: true,
+                      });
+                      setShowSugg(false);
+                      setCitySuggestions([]);
+                    }}
+                  >
+                    {c}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </Field>
 
         {isMileage ? (
@@ -178,7 +303,7 @@ export function LineItemCard({
         ) : (
           <Field label="Amount" required error={errors?.amount?.message}>
             <div className="relative">
-              <span className="absolute top-1/2 left-2.5 -translate-y-1/2 text-sm text-muted-foreground">
+              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
                 $
               </span>
               <Input

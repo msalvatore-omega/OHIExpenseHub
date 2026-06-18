@@ -52,6 +52,10 @@
   --color-action-scan-hover: var(--action-scan-hover);
   --color-action-scan-foreground: var(--action-scan-foreground);
   --color-surface: var(--surface);
+  /* Line-item table / card banding — three tiers (page < row < header). */
+  --color-table-row-band: var(--table-row-band);
+  --color-table-header-band: var(--table-header-band);
+  --color-table-row-divider: var(--table-row-divider);
   --color-popover-foreground: var(--popover-foreground);
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
@@ -131,6 +135,11 @@
   --chart-4: var(--warning);
   --chart-5: var(--danger);
 
+  /* Line-item table banding (three tiers: page < row-tint < header). */
+  --table-row-band: #f8fafc;   /* slate-50 */
+  --table-header-band: #e2e8f0; /* slate-200 */
+  --table-row-divider: #eaeff6;
+
   /* Sidebar (light): blue-50 tint, navy text, gold focus. */
   --sidebar: #EFF6FF;
   --sidebar-foreground: var(--foreground);
@@ -191,6 +200,11 @@
   --chart-3: var(--success);
   --chart-4: var(--warning);
   --chart-5: var(--danger);
+
+  /* Line-item table banding — dark variants. */
+  --table-row-band: #1e293b;   /* slate-800 */
+  --table-header-band: #334155; /* slate-700 */
+  --table-row-divider: #2d3e55;
 
   --sidebar: #0d1e34;
   --sidebar-foreground: var(--foreground);

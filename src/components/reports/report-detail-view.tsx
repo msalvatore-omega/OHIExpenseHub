@@ -166,7 +166,7 @@ export function ReportDetailView({
         <div className="overflow-hidden rounded-xl border border-border">
           <Table>
             <TableHeader>
-              <TableRow>
+              <TableRow className="bg-table-header-band font-semibold">
                 <TableHead>Date</TableHead>
                 <TableHead>Type</TableHead>
                 <TableHead>Description</TableHead>
@@ -176,12 +176,18 @@ export function ReportDetailView({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {report.lineItems.map((li) => {
+              {report.lineItems.map((li, liIdx) => {
                 const receipt = li.receiptId
                   ? receiptById.get(li.receiptId)
                   : undefined;
                 return (
-                  <TableRow key={li.id}>
+                  <TableRow
+                    key={li.id}
+                    className={cn(
+                      "border-b border-table-row-divider",
+                      liIdx % 2 === 0 ? "bg-table-row-band" : "bg-background"
+                    )}
+                  >
                     <TableCell className="text-muted-foreground">
                       {formatDate(li.expenseDate)}
                     </TableCell>
