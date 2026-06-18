@@ -58,7 +58,10 @@ function downloadWorkbook(ws: WorkSheet, sheetName: string, fileBase: string) {
   URL.revokeObjectURL(url);
 }
 
-const HEADERS = [
+// Column segments are kept separate so they can be joined conditionally.
+// GL Code + GL Name are included in the sheet only when includeGlColumns is true;
+// the columns are omitted entirely (not blanked) for SUBMITTER/APPROVER exports.
+const HEADERS_PRE_GL = [
   "Report Name",
   "Report ID",
   "Submitter",
@@ -68,8 +71,11 @@ const HEADERS = [
   "Period To",
   "Expense Date",
   "Expense Type",
-  "GL Code",
-  "GL Name",
+] as const;
+
+const HEADERS_GL = ["GL Code", "GL Name"] as const;
+
+const HEADERS_POST_GL = [
   "Purpose",
   "Description",
   "City",
@@ -84,7 +90,10 @@ const HEADERS = [
   "Approval Date",
 ] as const;
 
-const CURRENCY_COLS = [16, 18]; // Amount, Calculated Amount
+// "Amount" is the 6th column in HEADERS_POST_GL (0-indexed: 5).
+// Its absolute index shifts depending on whether GL columns are present.
+const AMOUNT_POST_GL_IDX = 5; // index of "Amount" within HEADERS_POST_GL
+
 const CURRENCY_FMT = '"$"#,##0.00';
 
 export interface ExcelExportContext {
@@ -111,6 +120,19 @@ export function exportReportToExcel(ctx: ExcelExportContext): void {
   const approvedBy = approved ? name(approved.approverId) : "";
   const approvalDate = approved ? approved.createdAt.slice(0, 10) : "";
 
+  const headers = [
+    ...HEADERS_PRE_GL,
+    ...(includeGlColumns ? HEADERS_GL : []),
+    ...HEADERS_POST_GL,
+  ];
+
+  // Absolute column index of "Amount" shifts by 2 when GL columns are present.
+  const amountCol =
+    HEADERS_PRE_GL.length +
+    (includeGlColumns ? HEADERS_GL.length : 0) +
+    AMOUNT_POST_GL_IDX;
+  const currencyCols = [amountCol, amountCol + 2]; // Amount, Calculated Amount
+
   const rows = report.lineItems.map((li) => {
     const type = typesById.get(li.expenseTypeId);
     const attached =
@@ -125,8 +147,7 @@ export function exportReportToExcel(ctx: ExcelExportContext): void {
       report.periodTo,
       li.expenseDate,
       type?.displayName ?? "",
-      includeGlColumns ? type?.glCode ?? "" : "",
-      includeGlColumns ? type?.glName ?? "" : "",
+      ...(includeGlColumns ? [type?.glCode ?? "", type?.glName ?? ""] : []),
       li.purposeOfTrip,
       li.description,
       li.city,
@@ -142,10 +163,10 @@ export function exportReportToExcel(ctx: ExcelExportContext): void {
     ];
   });
 
-  const ws: WorkSheet = utils.aoa_to_sheet([[...HEADERS], ...rows]);
-  ws["!cols"] = HEADERS.map((h) => ({ wch: Math.max(12, h.length + 2) }));
-  styleHeader(ws, HEADERS.length);
-  applyCurrency(ws, rows.length, CURRENCY_COLS);
+  const ws: WorkSheet = utils.aoa_to_sheet([[...headers], ...rows]);
+  ws["!cols"] = headers.map((h) => ({ wch: Math.max(12, h.length + 2) }));
+  styleHeader(ws, headers.length);
+  applyCurrency(ws, rows.length, currencyCols);
   downloadWorkbook(ws, "Expense Report", report.reportName || "expense-report");
 }
 

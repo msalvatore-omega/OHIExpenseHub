@@ -199,6 +199,8 @@ export function ReportPrintView({ reportId }: { reportId: string }) {
               <th className="px-2 py-1.5 font-semibold">#</th>
               <th className="px-2 py-1.5 font-semibold">Date</th>
               <th className="px-2 py-1.5 font-semibold">Type</th>
+              <th className="px-2 py-1.5 font-semibold">GL Code</th>
+              <th className="px-2 py-1.5 font-semibold">GL Name</th>
               <th className="px-2 py-1.5 font-semibold">Description</th>
               <th className="px-2 py-1.5 font-semibold">Location</th>
               <th className="px-2 py-1.5 text-right font-semibold">Amount</th>
@@ -208,7 +210,10 @@ export function ReportPrintView({ reportId }: { reportId: string }) {
             {orderedTypeIds.map((typeId) => {
               const items = byType.get(typeId)!;
               const subtotal = items.reduce((s, li) => s + li.amount, 0);
-              const typeName = typeById.get(typeId)?.displayName ?? "—";
+              const expType = typeById.get(typeId);
+              const typeName = expType?.displayName ?? "—";
+              const glCode = expType?.glCode ?? "—";
+              const glName = expType?.glName ?? "—";
               return (
                 <React.Fragment key={typeId}>
                   {items.map((li) => {
@@ -220,6 +225,8 @@ export function ReportPrintView({ reportId }: { reportId: string }) {
                           {formatDate(li.expenseDate)}
                         </td>
                         <td className="px-2 py-1.5">{typeName}</td>
+                        <td className="px-2 py-1.5">{glCode}</td>
+                        <td className="px-2 py-1.5">{glName}</td>
                         <td className="px-2 py-1.5">{li.description}</td>
                         <td className="px-2 py-1.5">{location(li)}</td>
                         <td className="px-2 py-1.5 text-right tabular-nums">
@@ -229,7 +236,7 @@ export function ReportPrintView({ reportId }: { reportId: string }) {
                     );
                   })}
                   <tr className="border-b border-border bg-muted/30">
-                    <td colSpan={5} className="px-2 py-1.5 text-right text-muted-foreground">
+                    <td colSpan={7} className="px-2 py-1.5 text-right text-muted-foreground">
                       Subtotal — {typeName}
                     </td>
                     <td className="px-2 py-1.5 text-right font-medium tabular-nums">
@@ -240,7 +247,7 @@ export function ReportPrintView({ reportId }: { reportId: string }) {
               );
             })}
             <tr className="border-t-2 border-primary">
-              <td colSpan={5} className="px-2 py-2 text-right font-bold">
+              <td colSpan={7} className="px-2 py-2 text-right font-bold">
                 Total
               </td>
               <td className="px-2 py-2 text-right font-bold tabular-nums">
