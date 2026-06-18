@@ -5,7 +5,7 @@ import { Loader2, Upload, UploadCloud } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import type { ReceiptSource } from "@/lib/types";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { CameraCaptureButton } from "@/components/gallery/camera-capture-button";
 
 const ACCEPT = "image/jpeg,image/png,application/pdf";
@@ -61,7 +61,8 @@ export function UploadZone({
             onFiles={(files) => onFiles(files, "CAMERA")}
             processing={processing}
             iconClassName="size-4"
-            className={cn(buttonVariants({ size: "sm" }))}
+            label="Scan"
+            className="inline-flex h-7 items-center gap-1 rounded-lg px-2.5 text-[0.8rem] font-medium whitespace-nowrap transition-colors bg-action-scan text-action-scan-foreground hover:bg-action-scan-hover disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />
           <Button
             type="button"
@@ -80,7 +81,7 @@ export function UploadZone({
         <CameraCaptureButton
           onFiles={(files) => onFiles(files, "CAMERA")}
           processing={processing}
-          className={cn(buttonVariants(), "h-12 flex-1")}
+          className="inline-flex h-12 flex-1 items-center justify-center gap-2 rounded-lg px-4 text-sm font-medium whitespace-nowrap transition-colors bg-action-scan text-action-scan-foreground hover:bg-action-scan-hover disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         />
         <Button
           type="button"

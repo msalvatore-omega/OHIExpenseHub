@@ -28,6 +28,8 @@ export interface NavChild {
   label: string;
   href: string;
   icon: LucideIcon;
+  /** Extra class applied to the icon when this child's route is active. */
+  iconActiveClass?: string;
 }
 
 export interface NavItem {
@@ -38,6 +40,8 @@ export interface NavItem {
   roles?: UserRole[];
   /** When present, the item is an expandable group rather than a direct link. */
   children?: NavChild[];
+  /** Extra class applied to the icon when this item's route is active. */
+  iconActiveClass?: string;
 }
 
 export const NAV_ITEMS: NavItem[] = [
@@ -45,7 +49,7 @@ export const NAV_ITEMS: NavItem[] = [
   { label: "New Expense", href: "/reports/new", icon: FilePlus2 },
   { label: "My Expenses", href: "/my-expenses", icon: ReceiptText },
   { label: "Approvals", href: "/approvals", icon: ClipboardCheck },
-  { label: "Receipt Gallery", href: "/gallery", icon: Images },
+  { label: "Receipt Gallery", href: "/gallery", icon: Images, iconActiveClass: "text-action-scan-foreground" },
   {
     label: "Accounting",
     href: "/accounting",

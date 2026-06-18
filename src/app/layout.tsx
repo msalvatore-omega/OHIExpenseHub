@@ -4,7 +4,6 @@ import "./globals.css";
 
 import { APP_NAME, BRAND_BLUE } from "@/lib/constants";
 import { Providers } from "@/components/providers";
-import { DevRoleSwitcher } from "@/components/dev-role-switcher";
 
 // Inter is the UI typeface; bound to --font-sans which the Tailwind theme reads.
 const inter = Inter({
@@ -49,7 +48,6 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col">
         <Providers>
           {children}
-          <DevRoleSwitcher />
         </Providers>
       </body>
     </html>

@@ -180,7 +180,12 @@ function DesktopSidebar({ items }: { items: NavItem[] }) {
                   : "text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
               )}
             >
-              <item.icon className="size-4 shrink-0" />
+              <item.icon
+                className={cn(
+                  "size-4 shrink-0",
+                  isActive(item.href) && item.iconActiveClass
+                )}
+              />
               {!collapsed && <span className="truncate">{item.label}</span>}
             </Link>
           )

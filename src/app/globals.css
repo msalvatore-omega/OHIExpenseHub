@@ -47,6 +47,10 @@
   --color-action-tint: var(--action-tint);
   --color-action-tint-hover: var(--action-tint-hover);
   --color-action-tint-foreground: var(--action-tint-foreground);
+  /* Teal accent — Scan Receipt button family + Receipt Gallery nav icon. */
+  --color-action-scan: var(--action-scan);
+  --color-action-scan-hover: var(--action-scan-hover);
+  --color-action-scan-foreground: var(--action-scan-foreground);
   --color-surface: var(--surface);
   --color-popover-foreground: var(--popover-foreground);
   --color-popover: var(--popover);
@@ -92,6 +96,9 @@
   --action-tint: #e6f1fb;
   --action-tint-hover: #d3e6f8;
   --action-tint-foreground: #0c447c;
+  --action-scan: #ccfbf1;
+  --action-scan-hover: #99f6e4;
+  --action-scan-foreground: #0f766e;
 
   --accent: #c8a02e;
   --accent-hover: #b08c22;
@@ -153,6 +160,9 @@
   --action-tint: #16304d;
   --action-tint-hover: #1e3e63;
   --action-tint-foreground: #bcdcff;
+  --action-scan: #134e4a;
+  --action-scan-hover: #115e59;
+  --action-scan-foreground: #99f6e4;
 
   --accent: #d4b24a;
   --accent-hover: #c8a02e;

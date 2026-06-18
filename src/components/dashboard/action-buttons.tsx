@@ -45,6 +45,9 @@ const TILE_PRIMARY =
 // Secondary actions: soft blue tint, deep-blue text/icon.
 const TILE_SECONDARY =
   "bg-action-tint text-action-tint-foreground hover:bg-action-tint-hover";
+// Scan Receipt tile: teal tonal — visually linked to the Receipt Gallery nav item.
+const TILE_SCAN =
+  "bg-action-scan text-action-scan-foreground hover:bg-action-scan-hover";
 
 export function ActionButtons({ userId }: { userId: string }) {
   const router = useRouter();
@@ -86,10 +89,10 @@ export function ActionButtons({ userId }: { userId: string }) {
         New Expense
       </button>
 
-      {/* Photo — quick receipt capture (secondary) */}
+      {/* Scan Receipt — quick receipt capture (teal tonal, linked to Receipt Gallery) */}
       <PhotoCaptureButton
         userId={userId}
-        className={cn(TILE_BASE, TILE_SECONDARY)}
+        className={cn(TILE_BASE, TILE_SCAN)}
       />
 
       {/* My Expenses (secondary) */}

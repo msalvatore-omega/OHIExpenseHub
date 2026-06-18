@@ -2,8 +2,8 @@
 
 // Shared camera capture trigger: a button + a hidden file input that opens the
 // camera on mobile (capture=environment) or a file picker on desktop, handing
-// the chosen file(s) to onFiles. Used by the dashboard Photo tile and the
-// Receipt Gallery upload zone so the capture control is identical in both.
+// the chosen file(s) to onFiles. Used by the dashboard Scan Receipt tile and
+// the Receipt Gallery upload zone so the capture control is identical in both.
 
 import * as React from "react";
 import { Camera, Loader2 } from "lucide-react";
@@ -15,7 +15,7 @@ export function CameraCaptureButton({
   processing = false,
   className,
   iconClassName = "size-5",
-  label = "Photo",
+  label = "Scan Receipt",
 }: {
   onFiles: (files: File[]) => void;
   /** Disables the button and shows a spinner while a capture is processing. */
