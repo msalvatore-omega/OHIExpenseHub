@@ -44,6 +44,7 @@ import type {
   Receipt,
   ReportChangeLogRow,
   ReportChangeType,
+  ReportStatus,
   User,
 } from "@/lib/types";
 import { ReportStatusSelect } from "@/components/reports/report-status-select";
@@ -65,6 +66,16 @@ import {
 const SELECT_CLASS =
   "h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
 
+// Same set + order as the Analytics status filter, for consistency.
+const REPORT_STATUSES: ReportStatus[] = [
+  "DRAFT",
+  "SUBMITTED",
+  "IN_REVIEW",
+  "APPROVED",
+  "REJECTED",
+  "PAID",
+];
+
 interface PeopleFilter {
   personId: string;
   from: string;
@@ -72,6 +83,42 @@ interface PeopleFilter {
 }
 
 const EMPTY_FILTER: PeopleFilter = { personId: "", from: "", to: "" };
+
+/** Toggle a status in/out of a multi-select list. */
+function toggleStatus(
+  list: ReportStatus[],
+  status: ReportStatus
+): ReportStatus[] {
+  return list.includes(status)
+    ? list.filter((s) => s !== status)
+    : [...list, status];
+}
+
+/** Chip toggle matching the Analytics status filter. */
+function StatusChip({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
+        active
+          ? "border-primary bg-primary text-primary-foreground"
+          : "border-border text-muted-foreground hover:bg-muted"
+      )}
+    >
+      {children}
+    </button>
+  );
+}
 
 /** Whether a report period [from, to] overlaps the filter range. */
 function periodOverlaps(
@@ -98,6 +145,8 @@ export function AccountingReports() {
   const showCodes = role === "ADMIN" || role === "ACCOUNTING";
 
   const [filter, setFilter] = React.useState<PeopleFilter>(EMPTY_FILTER);
+  // Status multi-select is specific to the Reports tab's list.
+  const [statuses, setStatuses] = React.useState<ReportStatus[]>([]);
 
   const users = useQuery({ queryKey: ["users"], queryFn: getUsers });
 
@@ -106,6 +155,17 @@ export function AccountingReports() {
       filter={filter}
       onChange={setFilter}
       users={users.data ?? []}
+    />
+  );
+
+  // Reports tab gets the same person/period filters plus a status filter.
+  const reportsFilters = (
+    <ReportFilters
+      filter={filter}
+      onChange={setFilter}
+      users={users.data ?? []}
+      statuses={statuses}
+      onStatusChange={setStatuses}
     />
   );
 
@@ -119,8 +179,8 @@ export function AccountingReports() {
       </TabsList>
 
       <TabsContent value="reports" className="flex flex-col gap-4 pt-4">
-        {filters}
-        <ReportsTab filter={filter} showCodes={showCodes} />
+        {reportsFilters}
+        <ReportsTab filter={filter} statuses={statuses} showCodes={showCodes} />
       </TabsContent>
 
       <TabsContent value="summary" className="flex flex-col gap-4 pt-4">
@@ -146,11 +206,26 @@ function ReportFilters({
   filter,
   onChange,
   users,
+  statuses,
+  onStatusChange,
 }: {
   filter: PeopleFilter;
   onChange: (f: PeopleFilter) => void;
   users: User[];
+  /** When provided, render the status multi-select alongside person/period. */
+  statuses?: ReportStatus[];
+  onStatusChange?: (s: ReportStatus[]) => void;
 }) {
+  const showStatus = statuses !== undefined && onStatusChange !== undefined;
+  const hasActive =
+    Boolean(filter.personId || filter.from || filter.to) ||
+    (statuses?.length ?? 0) > 0;
+
+  const clearAll = () => {
+    onChange(EMPTY_FILTER);
+    onStatusChange?.([]);
+  };
+
   return (
     <div className="flex flex-wrap items-end gap-3 rounded-xl border border-border p-3">
       <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
@@ -186,12 +261,28 @@ function ReportFilters({
           className="w-auto"
         />
       </label>
-      {(filter.personId || filter.from || filter.to) && (
+      {showStatus && (
+        <div className="flex flex-col gap-1">
+          <span className="text-xs font-medium text-muted-foreground">Status</span>
+          <div className="flex flex-wrap gap-1.5">
+            {REPORT_STATUSES.map((s) => (
+              <StatusChip
+                key={s}
+                active={statuses!.includes(s)}
+                onClick={() => onStatusChange!(toggleStatus(statuses!, s))}
+              >
+                {s}
+              </StatusChip>
+            ))}
+          </div>
+        </div>
+      )}
+      {hasActive && (
         <Button
           variant="ghost"
           size="sm"
           className="text-muted-foreground"
-          onClick={() => onChange(EMPTY_FILTER)}
+          onClick={clearAll}
         >
           Clear
         </Button>
@@ -240,9 +331,11 @@ function sortValue(row: AccountingReportRow, key: SortKey): string | number {
 
 function ReportsTab({
   filter,
+  statuses,
   showCodes,
 }: {
   filter: PeopleFilter;
+  statuses: ReportStatus[];
   showCodes: boolean;
 }) {
   const router = useRouter();
@@ -287,7 +380,8 @@ function ReportsTab({
     const filtered = (reports.data ?? []).filter(
       (r) =>
         matchesPerson(r.report.submitterId, r.report.paidToId, filter) &&
-        periodOverlaps(r.report.periodFrom, r.report.periodTo, filter)
+        periodOverlaps(r.report.periodFrom, r.report.periodTo, filter) &&
+        (statuses.length === 0 || statuses.includes(r.report.status))
     );
     const dir = sort.dir === "asc" ? 1 : -1;
     return [...filtered].sort((a, b) => {
@@ -298,7 +392,7 @@ function ReportsTab({
       }
       return String(av).localeCompare(String(bv)) * dir;
     });
-  }, [reports.data, filter, sort]);
+  }, [reports.data, filter, statuses, sort]);
 
   return (
     <div className="overflow-hidden rounded-xl border border-border">
