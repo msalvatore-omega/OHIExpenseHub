@@ -43,25 +43,25 @@ const TRAILS: { pattern: string; crumbs: Crumb[] }[] = [
     crumbs: [{ label: "Approvals", href: "/approvals" }, { label: REPORT }],
   },
   { pattern: "/admin", crumbs: [{ label: "Admin" }] },
-  { pattern: "/accounting", crumbs: [{ label: "Reports & Analytics" }] },
+  { pattern: "/accounting", crumbs: [{ label: "Accounting" }] },
   {
     pattern: "/accounting/analytics",
     crumbs: [
-      { label: "Reports & Analytics", href: "/accounting" },
+      { label: "Accounting", href: "/accounting" },
       { label: "Analytics" },
     ],
   },
   {
     pattern: "/accounting/reports",
     crumbs: [
-      { label: "Reports & Analytics", href: "/accounting" },
+      { label: "Accounting", href: "/accounting" },
       { label: "Expense Reports" },
     ],
   },
   {
     pattern: "/accounting/reports/:id",
     crumbs: [
-      { label: "Reports & Analytics", href: "/accounting" },
+      { label: "Accounting", href: "/accounting" },
       { label: "Expense Reports", href: "/accounting/reports" },
       { label: REPORT },
     ],

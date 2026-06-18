@@ -40,7 +40,7 @@ export const NAV_ITEMS: NavItem[] = [
   { label: "Approvals", href: "/approvals", icon: ClipboardCheck },
   { label: "Receipt Gallery", href: "/gallery", icon: Images },
   {
-    label: "Reports & Analytics",
+    label: "Accounting",
     href: "/accounting",
     icon: Calculator,
     roles: ["ACCOUNTING", "ADMIN"],
