@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 
 import { APP_NAME } from "@/lib/constants";
 import { useSession } from "@/lib/auth/mock-session";
+import { clearAnnouncementDismissal } from "@/components/announcement-banner";
 import { BrandLogo } from "@/components/brand-logo";
 import { Button } from "@/components/ui/button";
 import {
@@ -33,6 +34,10 @@ export default function LoginPage() {
   const { role, setRole } = useSession();
 
   function handleSignIn() {
+    // A login starts a fresh session: clear any prior in-tab banner dismissal so
+    // the announcement shows again (sessionStorage alone would survive re-login
+    // within the same tab).
+    clearAnnouncementDismissal();
     // "Set" the mock session (re-affirm the current role) and enter the app.
     setRole(role);
     router.push("/dashboard");

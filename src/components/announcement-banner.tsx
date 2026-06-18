@@ -12,7 +12,21 @@ import { useSystemSettings } from "@/lib/use-system-settings";
 
 // Per-session, per-message dismissal. Storing the dismissed message text means a
 // new/edited message reappears for everyone (it differs from what was dismissed).
+// sessionStorage (NOT localStorage) is deliberate: it clears when the tab/window
+// closes, so a new browser session always shows the banner fresh.
 const DISMISS_KEY = "ohi-dismissed-announcement";
+
+/**
+ * Forget any in-session dismissal so the banner shows again. Called on login so
+ * a fresh sign-in always starts a clean session, even in the same browser tab.
+ */
+export function clearAnnouncementDismissal(): void {
+  try {
+    sessionStorage.removeItem(DISMISS_KEY);
+  } catch {
+    // sessionStorage unavailable — nothing to clear.
+  }
+}
 
 /** Render announcement text with minimal markdown: **bold** + preserved newlines. */
 export function AnnouncementText({ message }: { message: string }) {
