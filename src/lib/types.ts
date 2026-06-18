@@ -415,3 +415,27 @@ export interface DateRange {
 }
 
 export type DuplicateSensitivity = "HIGH" | "MEDIUM" | "LOW";
+
+// ---- Approval chain display (used by the read-only report view) ----
+
+export type ChainStepStatus = "approved" | "current" | "pending" | "rejected";
+
+export interface ApprovalChainStepDisplay {
+  kind: "user" | "group";
+  /** "Approver 1", "Approver 2", "Accounting Approval", etc. */
+  label: string;
+  /** Person name (user steps) or "N members" (group steps). */
+  actorDisplay: string;
+  status: ChainStepStatus;
+  /** ISO timestamp: when the step was actioned (or when it became pending). */
+  actedAt?: string;
+  /** For group steps: the specific member who approved/rejected. */
+  actedByName?: string;
+  /** Comment left by the approver for this step. */
+  note?: string;
+}
+
+export interface ApprovalChainInfoResult {
+  steps: ApprovalChainStepDisplay[];
+  fastTracked: boolean;
+}

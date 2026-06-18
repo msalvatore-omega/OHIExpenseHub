@@ -58,6 +58,8 @@ import type {
   AnalyticsFilter,
   AppSettings,
   ApprovalActionResult,
+  ApprovalChainInfoResult,
+  ApprovalChainStepDisplay,
   ApprovalGroupKey,
   ApprovalGroupWithMembers,
   ApprovalHistory,
@@ -1539,6 +1541,125 @@ export async function updateExpenseType(
 export async function getOutbox(): Promise<MockEmail[]> {
   await delay();
   return [...listOutbox()].sort((a, b) => b.sentAt.localeCompare(a.sentAt));
+}
+
+// ---- Report view: access control + chain display ----
+
+export async function canViewReport(
+  reportId: string,
+  userId: string
+): Promise<boolean> {
+  await delay(50, 150);
+  const report = findReport(reportId);
+  if (!report) return false;
+  const user = userById(userId);
+  if (!user) return false;
+  if (user.role === "ACCOUNTING" || user.role === "ADMIN") return true;
+  if (involvesUser(report, userId)) return true;
+  const history = listApprovalHistory(reportId);
+  if (history.some((h) => h.approverId === userId)) return true;
+  const groupIds = new Set(
+    history.filter((h) => h.approvalGroupId).map((h) => h.approvalGroupId!)
+  );
+  if (groupIds.size > 0) {
+    const isMember = listApprovalGroupMembers().some(
+      (m) => groupIds.has(m.groupId) && m.userId === userId && m.isActive
+    );
+    if (isMember) return true;
+  }
+  return false;
+}
+
+export async function getApprovalChainInfo(
+  reportId: string
+): Promise<ApprovalChainInfoResult | null> {
+  await delay();
+  const report = findReport(reportId);
+  if (!report) return null;
+
+  const chain = buildChain(report);
+  const history = [...listApprovalHistory(reportId)].sort(
+    (a, b) => a.createdAt.localeCompare(b.createdAt)
+  );
+  const approvedHistory = history.filter((h) => h.action === "APPROVED");
+  const pendingEntry = history.find((h) => h.action === "PENDING");
+  const rejectedEntries = history.filter((h) => h.action === "REJECTED");
+  const lastRejected =
+    rejectedEntries.length > 0
+      ? rejectedEntries[rejectedEntries.length - 1]
+      : undefined;
+
+  const actorDisplay = (step: ChainStep): string => {
+    if (step.kind === "user") return userName(step.userId);
+    const count = activeGroupMemberIds(step.groupId).length;
+    return `${count} member${count !== 1 ? "s" : ""}`;
+  };
+
+  // DRAFT: mark the step that last rejected (others are pending)
+  if (report.status === "DRAFT") {
+    return {
+      steps: chain.map((step): ApprovalChainStepDisplay => {
+        const label = stepLabelOf(step, chain);
+        const display = actorDisplay(step);
+        if (lastRejected) {
+          const isRejectedStep =
+            step.kind === "user"
+              ? step.userId === lastRejected.approverId
+              : step.groupId === lastRejected.approvalGroupId;
+          if (isRejectedStep) {
+            return {
+              kind: step.kind,
+              label,
+              actorDisplay: display,
+              status: "rejected",
+              actedAt: lastRejected.createdAt,
+              actedByName: lastRejected.approverId
+                ? userName(lastRejected.approverId)
+                : undefined,
+              note: lastRejected.comment,
+            };
+          }
+        }
+        return { kind: step.kind, label, actorDisplay: display, status: "pending" };
+      }),
+      fastTracked: isFastTracked(report),
+    };
+  }
+
+  // In-flight / completed: approved[i] maps to chain[i]
+  const steps: ApprovalChainStepDisplay[] = chain.map((step, i) => {
+    const label = stepLabelOf(step, chain);
+    const display = actorDisplay(step);
+
+    if (i < approvedHistory.length) {
+      const h = approvedHistory[i];
+      const who = h.approverId ? userName(h.approverId) : undefined;
+      return {
+        kind: step.kind,
+        label,
+        actorDisplay: display,
+        status: "approved",
+        actedAt: h.createdAt,
+        actedByName: who !== "—" ? who : undefined,
+        note: h.comment,
+      };
+    }
+
+    if (i === approvedHistory.length && pendingEntry) {
+      return {
+        kind: step.kind,
+        label,
+        actorDisplay: display,
+        status: "current",
+        actedAt: pendingEntry.createdAt,
+        note: pendingEntry.comment,
+      };
+    }
+
+    return { kind: step.kind, label, actorDisplay: display, status: "pending" };
+  });
+
+  return { steps, fastTracked: isFastTracked(report) };
 }
 
 // Re-export approval history type consumers may want alongside the layer.

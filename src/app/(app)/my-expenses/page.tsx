@@ -165,7 +165,15 @@ export default function MyExpensesPage() {
                         variant="outline"
                         size="sm"
                         nativeButton={false}
-                        render={<Link href={`/reports/${r.id}/edit`} />}
+                        render={
+                          <Link
+                            href={
+                              r.status === "DRAFT"
+                                ? `/reports/${r.id}/edit`
+                                : `/reports/${r.id}/view`
+                            }
+                          />
+                        }
                       >
                         Open
                       </Button>

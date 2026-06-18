@@ -393,6 +393,8 @@ function ReportListBody({
   loading: boolean;
   reports: ExpenseReport[];
 }) {
+  const router = useRouter();
+
   if (loading) return <RowsSkeleton />;
   if (reports.length === 0)
     return <EmptyState message="Nothing in approval." />;
@@ -402,7 +404,13 @@ function ReportListBody({
       {reports.map((r) => (
         <li
           key={r.id}
-          className="flex items-center justify-between gap-3 rounded-lg border border-border p-3"
+          role="button"
+          tabIndex={0}
+          className="flex cursor-pointer items-center justify-between gap-3 rounded-lg border border-border p-3 transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          onClick={() => router.push(`/reports/${r.id}/view`)}
+          onKeyDown={(e) =>
+            e.key === "Enter" && router.push(`/reports/${r.id}/view`)
+          }
         >
           <div className="min-w-0">
             <p className="truncate text-sm font-medium">{r.reportName}</p>

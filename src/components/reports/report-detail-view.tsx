@@ -62,12 +62,15 @@ const ACTION_META: Record<
 export function ReportDetailView({
   reportId,
   actions,
+  midContent,
   footer,
   reserveBottomSpace = false,
 }: {
   reportId: string;
   /** Right-aligned header slot (e.g. export buttons). */
   actions?: React.ReactNode;
+  /** Rendered between line items and approval history (e.g. rejection log). */
+  midContent?: React.ReactNode;
   /** Rendered after the content (e.g. a sticky decision panel). */
   footer?: React.ReactNode;
   /** Adds extra bottom padding so a fixed footer doesn't cover content. */
@@ -211,6 +214,8 @@ export function ReportDetailView({
           </Table>
         </div>
       </section>
+
+      {midContent}
 
       {/* Approval history timeline */}
       <section className="flex flex-col gap-3">

@@ -3,6 +3,8 @@
 // Approval routing table: active (non-DRAFT, non-PAID) reports the current user
 // is involved in, as submitter or approver.
 
+import { useRouter } from "next/navigation";
+
 import { formatCurrency } from "@/lib/format";
 import { useRouting } from "@/components/dashboard/use-dashboard-data";
 import { StatusPill } from "@/components/status-pill";
@@ -17,6 +19,7 @@ import {
 } from "@/components/ui/table";
 
 export function RoutingTable({ userId }: { userId: string }) {
+  const router = useRouter();
   const routing = useRouting(userId);
   const rows = routing.data ?? [];
 
@@ -62,7 +65,11 @@ export function RoutingTable({ userId }: { userId: string }) {
             ) : (
               rows.map(
                 ({ report, submitterName, approverName, step, fastTracked }) => (
-                  <TableRow key={report.id}>
+                  <TableRow
+                    key={report.id}
+                    className="cursor-pointer hover:bg-muted/40"
+                    onClick={() => router.push(`/reports/${report.id}/view`)}
+                  >
                     <TableCell className="font-medium">
                       <span className="block truncate">{report.reportName}</span>
                       <span className="text-xs text-muted-foreground tabular-nums">
