@@ -5,7 +5,7 @@
 
 import * as React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Trash2, UserPlus } from "lucide-react";
+import { Plus, Trash2, UserCheck, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 
 import { cn } from "@/lib/utils";
@@ -85,6 +85,7 @@ function UsersTab() {
   const [editing, setEditing] = React.useState<User | null>(null);
   const [adding, setAdding] = React.useState(false);
   const [deleting, setDeleting] = React.useState<User | null>(null);
+  const [reactivating, setReactivating] = React.useState<User | null>(null);
 
   const all = users.data ?? [];
   const activeUsers = all.filter((u) => u.isActive);
@@ -139,6 +140,16 @@ function UsersTab() {
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex justify-end gap-1">
+                    {!u.isActive && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setReactivating(u)}
+                      >
+                        <UserCheck className="size-4" />
+                        Reactivate
+                      </Button>
+                    )}
                     <Button
                       variant="outline"
                       size="sm"
@@ -151,7 +162,11 @@ function UsersTab() {
                       size="icon-sm"
                       className="text-muted-foreground hover:text-destructive"
                       onClick={() => setDeleting(u)}
-                      aria-label={`Delete ${u.name}`}
+                      aria-label={
+                        u.isActive
+                          ? `Deactivate ${u.name}`
+                          : `Delete ${u.name}`
+                      }
                     >
                       <Trash2 className="size-4" />
                     </Button>
@@ -187,6 +202,14 @@ function UsersTab() {
         onDone={() => {
           invalidate();
           setDeleting(null);
+        }}
+      />
+      <ReactivateUserDialog
+        user={reactivating}
+        onClose={() => setReactivating(null)}
+        onDone={() => {
+          invalidate();
+          setReactivating(null);
         }}
       />
     </div>
@@ -437,6 +460,57 @@ function DeleteUserDialog({
             onClick={() => hardDelete.mutate()}
           >
             Delete permanently
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** Confirm dialog for reactivating an inactive user (inverse of deactivate). */
+function ReactivateUserDialog({
+  user,
+  onClose,
+  onDone,
+}: {
+  user: User | null;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const reactivate = useMutation({
+    mutationFn: () => setUserActive(user!.id, true),
+    onSuccess: () => {
+      toast.success("User reactivated");
+      onDone();
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
+  });
+
+  return (
+    <Dialog open={!!user} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Reactivate {user?.name}?</DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-muted-foreground">
+          <span className="font-medium text-foreground">{user?.name}</span> will
+          be able to sign in again and will reappear in all people pickers
+          (manager, approver, On Behalf Of, and delegate).
+        </p>
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={onClose}
+            disabled={reactivate.isPending}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={() => reactivate.mutate()}
+            disabled={reactivate.isPending}
+          >
+            <UserCheck className="size-4" />
+            Reactivate
           </Button>
         </DialogFooter>
       </DialogContent>
