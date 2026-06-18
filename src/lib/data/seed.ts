@@ -2,7 +2,11 @@
 // createSeedData() returns a fresh, deep-owned snapshot every call so the store
 // can mutate it freely and resetDemoData() can start clean.
 
-import { MILEAGE_RATE } from "@/lib/constants";
+import {
+  DEFAULT_APP_VERSION,
+  MILEAGE_RATE,
+  SETTING_KEYS,
+} from "@/lib/constants";
 import type {
   ApprovalHistory,
   Delegate,
@@ -13,6 +17,7 @@ import type {
   Receipt,
   ReceiptSource,
   ReportChangeLog,
+  SystemSetting,
   User,
 } from "@/lib/types";
 
@@ -27,6 +32,7 @@ export interface Database {
   approvalHistory: ApprovalHistory[];
   changeLogs: ReportChangeLog[];
   outbox: MockEmail[];
+  systemSettings: SystemSetting[];
 }
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -790,6 +796,15 @@ function buildChangeLogs(): ReportChangeLog[] {
   ];
 }
 
+/** Initial system settings: app version + (empty) announcement banner. */
+export function buildSystemSettings(): SystemSetting[] {
+  const updatedAt = "2026-01-01T00:00:00.000Z";
+  return [
+    { id: "setting-app-version", key: SETTING_KEYS.appVersion, value: DEFAULT_APP_VERSION, updatedAt },
+    { id: "setting-announcement", key: SETTING_KEYS.announcement, value: "", updatedAt },
+  ];
+}
+
 export function createSeedData(): Database {
   const specs = buildReportSpecs();
 
@@ -820,6 +835,7 @@ export function createSeedData(): Database {
     approvalHistory,
     changeLogs: buildChangeLogs(),
     outbox: buildOutbox(),
+    systemSettings: buildSystemSettings(),
   };
 }
 

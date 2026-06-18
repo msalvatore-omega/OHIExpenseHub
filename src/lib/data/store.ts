@@ -4,7 +4,11 @@
 // to a fresh in-memory seed and never touches window.
 
 import { STORAGE_KEY } from "@/lib/constants";
-import { createSeedData, type Database } from "@/lib/data/seed";
+import {
+  buildSystemSettings,
+  createSeedData,
+  type Database,
+} from "@/lib/data/seed";
 import type {
   ApprovalHistory,
   Delegate,
@@ -14,6 +18,7 @@ import type {
   MockEmail,
   Receipt,
   ReportChangeLog,
+  SystemSetting,
   User,
 } from "@/lib/types";
 
@@ -48,6 +53,7 @@ export function getDb(): Database {
   db = loadFromStorage() ?? createSeedData();
   // Forward-compat: older persisted snapshots predate some collections/fields.
   if (!db.changeLogs) db.changeLogs = [];
+  if (!db.systemSettings) db.systemSettings = buildSystemSettings();
   for (const u of db.users) {
     if (u.isActive === undefined) u.isActive = true;
     if (u.approver1Id === undefined) u.approver1Id = null;
@@ -355,4 +361,35 @@ export function insertEmail(email: MockEmail): MockEmail {
   getDb().outbox.push(email);
   persist();
   return email;
+}
+
+// ---- System settings (key-value) ----
+
+export function listSystemSettings(): SystemSetting[] {
+  return getDb().systemSettings;
+}
+
+export function getSettingValue(key: string): string | undefined {
+  return getDb().systemSettings.find((s) => s.key === key)?.value;
+}
+
+/** Upsert a setting row by key, stamping updatedAt. */
+export function upsertSetting(key: string, value: string): SystemSetting {
+  const data = getDb();
+  const existing = data.systemSettings.find((s) => s.key === key);
+  if (existing) {
+    existing.value = value;
+    existing.updatedAt = nowIso();
+    persist();
+    return existing;
+  }
+  const row: SystemSetting = {
+    id: newId("setting"),
+    key,
+    value,
+    updatedAt: nowIso(),
+  };
+  data.systemSettings.push(row);
+  persist();
+  return row;
 }

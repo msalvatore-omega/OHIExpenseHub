@@ -143,6 +143,20 @@ export interface MockEmail {
   sentAt: string;
 }
 
+/** A single key-value row in the SystemSettings store. */
+export interface SystemSetting {
+  id: string;
+  key: string;
+  value: string;
+  updatedAt: string;
+}
+
+/** The known system settings, resolved into a typed view for the UI. */
+export interface AppSettings {
+  appVersion: string;
+  announcementMessage: string;
+}
+
 /**
  * An audit-log entry recording a single change to a report after it has been
  * submitted. Mirrors the Prisma ReportChangeLog model.

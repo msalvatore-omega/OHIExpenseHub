@@ -9,6 +9,7 @@ import { Plus, Trash2, UserCheck, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 
 import { cn } from "@/lib/utils";
+import { SETTING_KEYS } from "@/lib/constants";
 import {
   createDelegate,
   createExpenseType,
@@ -21,9 +22,15 @@ import {
   getUsers,
   setUserActive,
   updateExpenseType,
+  updateSystemSetting,
   updateUser,
 } from "@/lib/data";
+import {
+  systemSettingsKey,
+  useSystemSettings,
+} from "@/lib/use-system-settings";
 import type { ExpenseType, User, UserRole } from "@/lib/types";
+import { AnnouncementBannerView } from "@/components/announcement-banner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -34,7 +41,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Table,
   TableBody,
@@ -54,7 +63,7 @@ export function AdminTabs() {
       <header>
         <h1>Admin</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Users, delegates, and expense types.
+          Users, delegates, expense types, and system settings.
         </p>
       </header>
       <Tabs defaultValue="users">
@@ -62,6 +71,7 @@ export function AdminTabs() {
           <TabsTrigger value="users">Users</TabsTrigger>
           <TabsTrigger value="delegates">Delegates</TabsTrigger>
           <TabsTrigger value="types">Expense Types</TabsTrigger>
+          <TabsTrigger value="system">System</TabsTrigger>
         </TabsList>
         <TabsContent value="users" className="pt-4">
           <UsersTab />
@@ -71,6 +81,9 @@ export function AdminTabs() {
         </TabsContent>
         <TabsContent value="types" className="pt-4">
           <ExpenseTypesTab />
+        </TabsContent>
+        <TabsContent value="system" className="pt-4">
+          <SystemTab />
         </TabsContent>
       </Tabs>
     </div>
@@ -939,5 +952,180 @@ function ExpenseTypeDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// ---------------- System ----------------
+
+function SystemTab() {
+  const qc = useQueryClient();
+  const settings = useSystemSettings();
+  const current = settings.data;
+
+  const [editingVersion, setEditingVersion] = React.useState(false);
+  const [versionDraft, setVersionDraft] = React.useState("");
+  const [messageDraft, setMessageDraft] = React.useState("");
+  // Seed the local drafts from the fetched settings once they arrive.
+  const seededRef = React.useRef(false);
+  React.useEffect(() => {
+    if (current && !seededRef.current) {
+      seededRef.current = true;
+      setVersionDraft(current.appVersion);
+      setMessageDraft(current.announcementMessage);
+    }
+  }, [current]);
+
+  const invalidate = () =>
+    qc.invalidateQueries({ queryKey: systemSettingsKey });
+  const onError = (e: unknown) =>
+    toast.error(e instanceof Error ? e.message : "Failed");
+
+  const saveVersion = useMutation({
+    mutationFn: () =>
+      updateSystemSetting(SETTING_KEYS.appVersion, versionDraft.trim()),
+    onSuccess: () => {
+      invalidate();
+      setEditingVersion(false);
+      toast.success("Version updated");
+    },
+    onError,
+  });
+
+  const publish = useMutation({
+    mutationFn: () =>
+      updateSystemSetting(SETTING_KEYS.announcement, messageDraft),
+    onSuccess: () => {
+      invalidate();
+      toast.success("Announcement published");
+    },
+    onError,
+  });
+
+  const clearAnnouncement = useMutation({
+    mutationFn: () => updateSystemSetting(SETTING_KEYS.announcement, ""),
+    onSuccess: () => {
+      setMessageDraft("");
+      invalidate();
+      toast.success("Announcement cleared");
+    },
+    onError,
+  });
+
+  if (!current) {
+    return (
+      <div className="flex flex-col gap-4">
+        <Skeleton className="h-28 w-full rounded-xl" />
+        <Skeleton className="h-56 w-full rounded-xl" />
+      </div>
+    );
+  }
+
+  const busy = publish.isPending || clearAnnouncement.isPending;
+
+  return (
+    <div className="flex flex-col gap-4">
+      {/* Version Number */}
+      <section className="flex flex-col gap-3 rounded-xl border border-border p-4">
+        <div>
+          <h3 className="text-sm font-semibold">Version Number</h3>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Shown in the sidebar footer for all users.
+          </p>
+        </div>
+        {editingVersion ? (
+          <div className="flex flex-wrap items-end gap-2">
+            <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+              Version
+              <Input
+                value={versionDraft}
+                onChange={(e) => setVersionDraft(e.target.value)}
+                placeholder="1.2.0"
+                className="w-40"
+              />
+            </label>
+            <Button
+              onClick={() => saveVersion.mutate()}
+              disabled={saveVersion.isPending || !versionDraft.trim()}
+            >
+              Save
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setEditingVersion(false);
+                setVersionDraft(current.appVersion);
+              }}
+              disabled={saveVersion.isPending}
+            >
+              Cancel
+            </Button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-3">
+            <span className="rounded-md bg-muted px-2.5 py-1 font-mono text-sm tabular-nums">
+              v{current.appVersion}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setVersionDraft(current.appVersion);
+                setEditingVersion(true);
+              }}
+            >
+              Edit
+            </Button>
+          </div>
+        )}
+      </section>
+
+      {/* Announcement Banner */}
+      <section className="flex flex-col gap-3 rounded-xl border border-border p-4">
+        <div>
+          <h3 className="text-sm font-semibold">Announcement Banner</h3>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Shown at the top of every page. Supports <code>**bold**</code>. An
+            empty message hides the banner for everyone.
+          </p>
+        </div>
+        <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+          Message
+          <Textarea
+            value={messageDraft}
+            onChange={(e) => setMessageDraft(e.target.value)}
+            rows={3}
+            placeholder="e.g. **Heads up:** Expense Hub maintenance this Saturday 8–10pm ET."
+          />
+        </label>
+
+        <div className="flex flex-col gap-1">
+          <span className="text-xs font-medium text-muted-foreground">
+            Preview
+          </span>
+          {messageDraft.trim() ? (
+            <div className="overflow-hidden rounded-lg border border-border">
+              <AnnouncementBannerView message={messageDraft} />
+            </div>
+          ) : (
+            <div className="rounded-lg border border-dashed border-border px-3 py-4 text-center text-xs text-muted-foreground">
+              No announcement — the banner is hidden for users.
+            </div>
+          )}
+        </div>
+
+        <div className="flex gap-2">
+          <Button onClick={() => publish.mutate()} disabled={busy}>
+            Publish
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => clearAnnouncement.mutate()}
+            disabled={busy || !current.announcementMessage}
+          >
+            Clear
+          </Button>
+        </div>
+      </section>
+    </div>
   );
 }

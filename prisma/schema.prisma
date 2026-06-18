@@ -126,6 +126,15 @@ model ExpenseReport {
   changeLogs ReportChangeLog[]
 }
 
+/// Key-value store for admin-managed system settings (app version, announcement
+/// banner message, …). Read on app load and cached client-side.
+model SystemSettings {
+  id        String   @id @default(cuid())
+  key       String   @unique @db.NVarChar(100)
+  value     String   @db.NVarChar(Max)
+  updatedAt DateTime @updatedAt
+}
+
 /// Audit trail: one row per change to a report after it has been submitted.
 model ReportChangeLog {
   id          String           @id @default(cuid())

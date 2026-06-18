@@ -10,6 +10,7 @@ import {
   clearApprovalHistory,
   findReceipt,
   findReport,
+  getSettingValue,
   insertApprovalHistory,
   insertChangeLog,
   insertEmail,
@@ -38,13 +39,19 @@ import {
   removeReport,
   removeUser,
   replaceLineItemsForReport,
+  upsertSetting,
   userHasRelations,
 } from "@/lib/data/store";
-import { MILEAGE_RATE } from "@/lib/constants";
+import {
+  DEFAULT_APP_VERSION,
+  MILEAGE_RATE,
+  SETTING_KEYS,
+} from "@/lib/constants";
 import { formatDate } from "@/lib/format";
 import type {
   AccountingReportRow,
   AnalyticsFilter,
+  AppSettings,
   ApprovalActionResult,
   ApprovalHistory,
   CreateDraftInput,
@@ -1158,6 +1165,26 @@ export async function getDelegatedPrincipals(
 export async function getExpenseTypes(): Promise<ExpenseType[]> {
   await delay();
   return [...listExpenseTypes()];
+}
+
+// ---- System settings ----
+
+/** Resolve the known system settings into a typed view (with fallbacks). */
+export async function getSystemSettings(): Promise<AppSettings> {
+  await delay();
+  return {
+    appVersion: getSettingValue(SETTING_KEYS.appVersion) ?? DEFAULT_APP_VERSION,
+    announcementMessage: getSettingValue(SETTING_KEYS.announcement) ?? "",
+  };
+}
+
+/** Update a single system setting by key (admin-only in the UI). */
+export async function updateSystemSetting(
+  key: string,
+  value: string
+): Promise<void> {
+  await delay();
+  upsertSetting(key, value);
 }
 
 // ---- Accounting / analytics ----

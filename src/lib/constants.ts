@@ -9,6 +9,15 @@ export const MILEAGE_RATE = 0.725;
 /** localStorage key for the persisted mock database. */
 export const STORAGE_KEY = "ohi-prototype-data";
 
+/** Well-known keys in the SystemSettings key-value store. */
+export const SETTING_KEYS = {
+  appVersion: "appVersion",
+  announcement: "announcementMessage",
+} as const;
+
+/** Fallback app version when the SystemSettings row is missing. */
+export const DEFAULT_APP_VERSION = "1.0.0";
+
 /** Brand palette — "Deep Harbor" navy (matches the --primary token). */
 export const BRAND_BLUE = "#0B2545";
 
