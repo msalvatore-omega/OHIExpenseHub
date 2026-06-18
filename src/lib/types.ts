@@ -14,6 +14,9 @@ export type ReportStatus =
 
 export type ApprovalAction = "PENDING" | "APPROVED" | "REJECTED";
 
+/** How a receipt entered the system (mirrors the ReceiptSource enum). */
+export type ReceiptSource = "UPLOAD" | "CAMERA" | "EMAIL";
+
 /** Category of an audited report change (mirrors the ReportChangeType enum). */
 export type ReportChangeType =
   | "STATUS"
@@ -106,8 +109,13 @@ export interface Receipt {
   id: string;
   /** The gallery owner this receipt belongs to. */
   userId: string;
-  /** Who actually uploaded it (a delegate, or the owner for self-uploads). */
-  uploadedById: string;
+  /**
+   * Who actually uploaded it (a delegate, or the owner for self-uploads).
+   * `null` for system ingestion (e.g. an emailed-in receipt has no app user).
+   */
+  uploadedById: string | null;
+  /** How the receipt entered the system. */
+  source: ReceiptSource;
   imageUrl: string;
   merchantName?: string;
   merchantDate?: string;
@@ -151,6 +159,11 @@ export interface ReportChangeLog {
   newValue?: string;
   /** Human-readable one-line description of the change. */
   summary: string;
+  /**
+   * Optional free-text detail attached to the change — e.g. the required reason
+   * an approver gives when sending a report back to the employee.
+   */
+  note?: string;
 }
 
 // ---- Derived / view types used by the data-access layer ----
@@ -176,6 +189,11 @@ export interface ReportDetail extends ExpenseReport {
 export interface ApprovalActionResult {
   report: ExpenseReport;
   notifications: MockEmail[];
+}
+
+/** Result of deleting a draft report: how many receipts were returned to the gallery. */
+export interface DeleteReportResult {
+  receiptsReturned: number;
 }
 
 /** A report enriched with the names and workflow step for routing/approval views. */
@@ -213,6 +231,8 @@ export interface CreateReceiptInput {
   userId: string;
   /** Uploader (session user). Defaults to userId for self-uploads. */
   uploadedById?: string;
+  /** How the receipt was captured. Defaults to UPLOAD. */
+  source?: ReceiptSource;
   imageUrl: string;
   merchantName?: string;
   merchantDate?: string;

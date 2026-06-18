@@ -3,19 +3,28 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, Loader2, XCircle } from "lucide-react";
+import { CheckCircle2, CornerUpLeft, Loader2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 
 import {
   approveReport,
   getReport,
   rejectReport,
+  sendBackReport,
 } from "@/lib/data";
 import { toastQueuedNotifications } from "@/lib/notify";
 import { dashboardKeys } from "@/components/dashboard/use-dashboard-data";
 import { ReportExportButtons } from "@/components/reports/report-export-buttons";
 import { ReportDetailView } from "@/components/reports/report-detail-view";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 
 export function ApprovalDetail({ reportId }: { reportId: string }) {
@@ -28,6 +37,8 @@ export function ApprovalDetail({ reportId }: { reportId: string }) {
   });
 
   const [comment, setComment] = React.useState("");
+  const [sendBackOpen, setSendBackOpen] = React.useState(false);
+  const [sendBackReason, setSendBackReason] = React.useState("");
 
   const afterDecision = () => {
     queryClient.invalidateQueries({ queryKey: ["report", reportId] });
@@ -56,7 +67,22 @@ export function ApprovalDetail({ reportId }: { reportId: string }) {
       toast.error(e instanceof Error ? e.message : "Could not reject"),
   });
 
-  const busy = approveMutation.isPending || rejectMutation.isPending;
+  const sendBackMutation = useMutation({
+    mutationFn: () => sendBackReport(reportId, sendBackReason.trim()),
+    onSuccess: (result) => {
+      toastQueuedNotifications(result.notifications);
+      setSendBackOpen(false);
+      setSendBackReason("");
+      afterDecision();
+    },
+    onError: (e) =>
+      toast.error(e instanceof Error ? e.message : "Could not send back"),
+  });
+
+  const busy =
+    approveMutation.isPending ||
+    rejectMutation.isPending ||
+    sendBackMutation.isPending;
   const status = reportQuery.data?.status;
   const open = status === "SUBMITTED" || status === "IN_REVIEW";
 
@@ -69,7 +95,7 @@ export function ApprovalDetail({ reportId }: { reportId: string }) {
           onChange={(e) => setComment(e.target.value)}
           rows={2}
         />
-        <div className="flex justify-end gap-2">
+        <div className="flex flex-wrap justify-end gap-2">
           <Button
             variant="outline"
             className="border-red-300 text-red-600 hover:bg-red-50 hover:text-red-700 dark:border-red-900 dark:hover:bg-red-950"
@@ -82,6 +108,14 @@ export function ApprovalDetail({ reportId }: { reportId: string }) {
               <XCircle className="size-4" />
             )}
             Reject
+          </Button>
+          <Button
+            variant="outline"
+            disabled={busy}
+            onClick={() => setSendBackOpen(true)}
+          >
+            <CornerUpLeft className="size-4" />
+            Send back to employee
           </Button>
           <Button
             className="bg-green-600 text-white hover:bg-green-700"
@@ -97,6 +131,61 @@ export function ApprovalDetail({ reportId }: { reportId: string }) {
           </Button>
         </div>
       </div>
+
+      {/* Send back to employee — requires a reason */}
+      <Dialog
+        open={sendBackOpen}
+        onOpenChange={(o) => {
+          if (busy) return;
+          setSendBackOpen(o);
+          if (!o) setSendBackReason("");
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Send back to employee</DialogTitle>
+            <DialogDescription>
+              The report returns to the employee&apos;s drafts to edit and
+              resubmit. Resubmitting restarts approval from the first approver.
+              A reason is required.
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            placeholder="Reason for returning this report…"
+            value={sendBackReason}
+            onChange={(e) => setSendBackReason(e.target.value)}
+            rows={3}
+            autoFocus
+          />
+          <DialogFooter>
+            <Button
+              variant="outline"
+              type="button"
+              disabled={sendBackMutation.isPending}
+              onClick={() => {
+                setSendBackOpen(false);
+                setSendBackReason("");
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              disabled={
+                sendBackMutation.isPending || sendBackReason.trim().length === 0
+              }
+              onClick={() => sendBackMutation.mutate()}
+            >
+              {sendBackMutation.isPending ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <CornerUpLeft className="size-4" />
+              )}
+              Send back
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   ) : null;
 

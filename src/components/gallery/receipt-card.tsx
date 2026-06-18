@@ -1,5 +1,7 @@
 "use client";
 
+import { Mail } from "lucide-react";
+
 import { cn } from "@/lib/utils";
 import { formatCurrency, formatDate } from "@/lib/format";
 import type { Receipt } from "@/lib/types";
@@ -17,6 +19,16 @@ function ReceiptStatusBadge({ attached }: { attached: boolean }) {
       )}
     >
       {attached ? "Attached" : "Unattached"}
+    </span>
+  );
+}
+
+/** Small tag marking a receipt that arrived via the email-in mailbox. */
+function EmailSourceTag() {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+      <Mail className="size-3" />
+      Email
     </span>
   );
 }
@@ -67,7 +79,10 @@ export function ReceiptCard({
         </span>
       </div>
 
-      <ReceiptStatusBadge attached={receipt.isAttached} />
+      <div className="flex flex-wrap items-center gap-1.5">
+        <ReceiptStatusBadge attached={receipt.isAttached} />
+        {receipt.source === "EMAIL" && <EmailSourceTag />}
+      </div>
     </button>
   );
 }

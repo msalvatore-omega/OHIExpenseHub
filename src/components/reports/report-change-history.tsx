@@ -105,6 +105,12 @@ export function ChangeHistoryDialog({
                           <span className="font-medium">{c.newValue}</span>
                         </div>
                       )}
+                      {c.note && (
+                        <div className="mt-0.5 text-xs">
+                          <span className="text-muted-foreground">Reason: </span>
+                          <span className="italic">{c.note}</span>
+                        </div>
+                      )}
                     </TableCell>
                     <TableCell className="whitespace-nowrap">
                       {nameById.get(c.changedById) ?? "System"}

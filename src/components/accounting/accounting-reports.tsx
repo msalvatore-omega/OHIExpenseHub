@@ -774,6 +774,11 @@ function ChangeLogTab({ filter }: { filter: PeopleFilter }) {
                           ({r.change.oldValue} → {r.change.newValue})
                         </span>
                       )}
+                    {r.change.note && (
+                      <span className="mt-0.5 block text-xs text-muted-foreground italic">
+                        Reason: {r.change.note}
+                      </span>
+                    )}
                   </TableCell>
                 </TableRow>
               ))

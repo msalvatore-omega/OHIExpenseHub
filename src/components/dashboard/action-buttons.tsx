@@ -37,8 +37,17 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 
-const TILE =
-  "flex h-full w-full flex-col items-center justify-center gap-2 rounded-xl p-4 text-sm font-medium text-white shadow-sm transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:opacity-60";
+// Tonal-blue action tiles: one brand-blue family in varied weight. Layout
+// (size, radius, padding, icon stack) is shared; only the color treatment
+// differs. Colors come from theme tokens so the palette inverts in dark mode.
+const TILE_BASE =
+  "flex h-full w-full flex-col items-center justify-center gap-2 rounded-xl p-4 text-sm font-medium shadow-sm transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:opacity-60";
+// Primary action: solid deep blue, white text/icon.
+const TILE_PRIMARY =
+  "bg-action-primary text-action-primary-foreground hover:bg-action-primary-hover";
+// Secondary actions: soft blue tint, deep-blue text/icon.
+const TILE_SECONDARY =
+  "bg-action-tint text-action-tint-foreground hover:bg-action-tint-hover";
 
 export function ActionButtons({ userId }: { userId: string }) {
   const router = useRouter();
@@ -65,10 +74,10 @@ export function ActionButtons({ userId }: { userId: string }) {
 
   return (
     <section className="grid grid-cols-2 gap-3 md:grid-cols-5">
-      {/* New Expense (blue) */}
+      {/* New Expense — primary action (solid deep blue) */}
       <button
         type="button"
-        className={cn(TILE, "bg-blue-600 hover:bg-blue-600")}
+        className={cn(TILE_BASE, TILE_PRIMARY)}
         disabled={newExpense.isPending}
         onClick={() => newExpense.mutate()}
       >
@@ -80,19 +89,19 @@ export function ActionButtons({ userId }: { userId: string }) {
         New Expense
       </button>
 
-      {/* Photo — quick receipt capture (teal) */}
+      {/* Photo — quick receipt capture (secondary) */}
       <PhotoCaptureButton
         userId={userId}
-        className={cn(TILE, "bg-teal-600 hover:bg-teal-600")}
+        className={cn(TILE_BASE, TILE_SECONDARY)}
       />
 
-      {/* My Expenses (indigo) */}
+      {/* My Expenses (secondary) */}
       <Sheet>
         <SheetTrigger
           render={
             <button
               type="button"
-              className={cn(TILE, "bg-indigo-600 hover:bg-indigo-600")}
+              className={cn(TILE_BASE, TILE_SECONDARY)}
             />
           }
         >
@@ -108,13 +117,13 @@ export function ActionButtons({ userId }: { userId: string }) {
         </SheetContent>
       </Sheet>
 
-      {/* Approvals (amber) — desktop only */}
+      {/* Approvals (secondary) — desktop only */}
       <Sheet>
         <SheetTrigger
           render={
             <button
               type="button"
-              className={cn(TILE, "hidden bg-amber-500 hover:bg-amber-500 md:flex")}
+              className={cn(TILE_BASE, TILE_SECONDARY, "hidden md:flex")}
             />
           }
         >
@@ -130,10 +139,10 @@ export function ActionButtons({ userId }: { userId: string }) {
         </SheetContent>
       </Sheet>
 
-      {/* Receipt Gallery (purple) */}
+      {/* Receipt Gallery (secondary) */}
       <button
         type="button"
-        className={cn(TILE, "bg-purple-600 hover:bg-purple-600")}
+        className={cn(TILE_BASE, TILE_SECONDARY)}
         onClick={() => router.push("/gallery")}
       >
         <Images className="size-5" />

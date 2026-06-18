@@ -11,6 +11,7 @@ import type {
   ExpenseType,
   MockEmail,
   Receipt,
+  ReceiptSource,
   ReportChangeLog,
   User,
 } from "@/lib/types";
@@ -168,7 +169,7 @@ function buildExpenseTypes(): ExpenseType[] {
   ];
 }
 
-function buildReceipts(): Omit<Receipt, "uploadedById">[] {
+function buildReceipts(): Omit<Receipt, "uploadedById" | "source">[] {
   return [
     {
       id: "receipt-marriott",
@@ -806,8 +807,16 @@ export function createSeedData(): Database {
     expenseTypes: buildExpenseTypes(),
     reports,
     lineItems,
-    // Seed receipts are self-uploads: uploadedById defaults to the owner.
-    receipts: buildReceipts().map((r) => ({ ...r, uploadedById: r.userId })),
+    // Most seed receipts are self-uploads; one is an emailed-in receipt (no app
+    // uploader) so the gallery's "Email" source tag is visible out of the box.
+    receipts: buildReceipts().map((r) => {
+      const source: ReceiptSource = r.id === "receipt-hilton" ? "EMAIL" : "UPLOAD";
+      return {
+        ...r,
+        source,
+        uploadedById: source === "EMAIL" ? null : r.userId,
+      };
+    }),
     approvalHistory,
     changeLogs: buildChangeLogs(),
     outbox: buildOutbox(),

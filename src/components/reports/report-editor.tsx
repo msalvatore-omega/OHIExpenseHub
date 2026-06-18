@@ -18,13 +18,14 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { Plus } from "lucide-react";
+import { Loader2, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { MILEAGE_RATE } from "@/lib/constants";
 import { formatCurrency } from "@/lib/format";
 import {
   attachReceipt,
+  deleteReport,
   getDelegatedPrincipals,
   getExpenseTypes,
   getReceipts,
@@ -35,7 +36,7 @@ import {
   updateReport,
 } from "@/lib/data";
 import { useSession } from "@/lib/auth/mock-session";
-import { toastQueuedNotifications } from "@/lib/notify";
+import { deletedReportMessage, toastQueuedNotifications } from "@/lib/notify";
 import type { LineItemInput, ReportDetail } from "@/lib/types";
 import { dashboardKeys } from "@/components/dashboard/use-dashboard-data";
 import { StatusPill } from "@/components/status-pill";
@@ -288,6 +289,24 @@ function EditorForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isDraft]);
 
+  // ---- delete draft ----
+  const [deleteOpen, setDeleteOpen] = React.useState(false);
+  const deleteMutation = useMutation({
+    mutationFn: () => deleteReport(report.id, currentUserId),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: dashboardKeys.all });
+      // Returned receipts reappear as Unattached in the gallery + editor pickers.
+      queryClient.invalidateQueries({ queryKey: ["receipts"] });
+      queryClient.invalidateQueries({
+        queryKey: editorReceiptsKey(currentUserId),
+      });
+      toast.success(deletedReportMessage(result.receiptsReturned));
+      router.push("/my-expenses");
+    },
+    onError: (err) =>
+      toast.error(err instanceof Error ? err.message : "Could not delete"),
+  });
+
   // ---- submit confirm dialog ----
   const [confirmOpen, setConfirmOpen] = React.useState(false);
   // The validated values awaiting confirmation. State (not a ref) so it isn't
@@ -422,9 +441,22 @@ function EditorForm({
 
         {/* Sticky action bar (sits above the mobile tab bar) */}
         <div className="sticky bottom-16 z-30 -mx-6 flex items-center justify-between gap-2 border-t border-border bg-background/95 px-6 py-3 backdrop-blur md:bottom-0">
-          <Button type="button" variant="ghost" onClick={() => router.push("/dashboard")}>
-            Cancel
-          </Button>
+          <div className="flex items-center gap-1">
+            <Button type="button" variant="ghost" onClick={() => router.push("/dashboard")}>
+              Cancel
+            </Button>
+            {isDraft && (
+              <Button
+                type="button"
+                variant="ghost"
+                className="text-muted-foreground hover:text-destructive"
+                onClick={() => setDeleteOpen(true)}
+              >
+                <Trash2 className="size-4" />
+                <span className="hidden sm:inline">Delete</span>
+              </Button>
+            )}
+          </div>
           <div className="flex items-center gap-3">
             <span className="hidden text-sm text-muted-foreground sm:inline">
               Total:{" "}
@@ -485,6 +517,46 @@ function EditorForm({
               }}
             >
               Submit
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete draft confirmation */}
+      <Dialog
+        open={deleteOpen}
+        onOpenChange={(o) => !deleteMutation.isPending && setDeleteOpen(o)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete draft report?</DialogTitle>
+            <DialogDescription>
+              This draft will be permanently deleted. Any receipts attached to it
+              are returned to your Receipt Gallery (not deleted), where you can
+              reuse them.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              type="button"
+              onClick={() => setDeleteOpen(false)}
+              disabled={deleteMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={deleteMutation.isPending}
+              onClick={() => deleteMutation.mutate()}
+            >
+              {deleteMutation.isPending ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Trash2 className="size-4" />
+              )}
+              Delete report
             </Button>
           </DialogFooter>
         </DialogContent>

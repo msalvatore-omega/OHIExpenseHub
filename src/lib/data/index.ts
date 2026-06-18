@@ -7,6 +7,7 @@
 
 import {
   canAccessGallery,
+  clearApprovalHistory,
   findReceipt,
   findReport,
   insertApprovalHistory,
@@ -51,6 +52,7 @@ import type {
   CreateUserInput,
   Delegate,
   DelegateInput,
+  DeleteReportResult,
   ExpenseTypeInput,
   LedgerEntry,
   ExpenseLineItem,
@@ -80,6 +82,18 @@ export class ForbiddenError extends Error {
   constructor(message = "Forbidden") {
     super(message);
     this.name = "ForbiddenError";
+  }
+}
+
+/**
+ * State-conflict failure (maps to HTTP 409) — e.g. attempting an action that the
+ * report's current status doesn't allow, like deleting a non-draft report.
+ */
+export class ConflictError extends Error {
+  readonly status = 409;
+  constructor(message = "Conflict") {
+    super(message);
+    this.name = "ConflictError";
   }
 }
 
@@ -217,7 +231,7 @@ function recordChange(
   changedById: string,
   changeType: ReportChangeType,
   summary: string,
-  extra?: { field?: string; oldValue?: string; newValue?: string }
+  extra?: { field?: string; oldValue?: string; newValue?: string; note?: string }
 ): ReportChangeLog {
   return insertChangeLog({
     id: newId("change"),
@@ -229,6 +243,7 @@ function recordChange(
     oldValue: extra?.oldValue,
     newValue: extra?.newValue,
     summary,
+    note: extra?.note,
   });
 }
 
@@ -462,10 +477,47 @@ export async function updateReport(
   return updated;
 }
 
-export async function deleteReport(id: string): Promise<void> {
+/**
+ * Delete a DRAFT report, first returning any attached receipts to the gallery.
+ *
+ * Mirrors `DELETE /api/reports/[id]`: only the submitter or an ADMIN may delete,
+ * and only while the report is DRAFT (403 / 409 otherwise). Receipts referenced
+ * by the report's line items are detached (isAttached = false) so they reappear
+ * in the gallery's Unattached list — the Receipt rows and images are NOT deleted.
+ * The report and its line items / approval history / change log then cascade away.
+ */
+export async function deleteReport(
+  id: string,
+  actorId: string
+): Promise<DeleteReportResult> {
   await delay();
+  const report = findReport(id);
+  if (!report) throw new Error(`Report ${id} not found`);
+
+  // Authorize: submitter or ADMIN only, and only while DRAFT.
+  const actor = userById(actorId);
+  const canDelete = report.submitterId === actorId || actor?.role === "ADMIN";
+  if (!canDelete) {
+    throw new ForbiddenError("You do not have permission to delete this report.");
+  }
+  if (report.status !== "DRAFT") {
+    throw new ConflictError("Only draft reports can be deleted.");
+  }
+
+  // Detach receipts (return them to the gallery) before removing the report.
+  const returned = new Set<string>();
+  for (const li of listLineItems(id)) {
+    if (!li.receiptId || returned.has(li.receiptId)) continue;
+    const receipt = findReceipt(li.receiptId);
+    if (receipt?.isAttached) {
+      patchReceipt(li.receiptId, { isAttached: false });
+      returned.add(li.receiptId);
+    }
+  }
+
   const ok = removeReport(id);
   if (!ok) throw new Error(`Report ${id} not found`);
+  return { receiptsReturned: returned.size };
 }
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -754,6 +806,56 @@ export async function rejectReport(
   return { report: updated, notifications };
 }
 
+/**
+ * Return a report to the employee for revision. Distinct from rejection: the
+ * report goes back to DRAFT with a REQUIRED reason, and the approval workflow is
+ * fully reset (all in-progress approval state cleared) so a later resubmission
+ * starts over from Approver #1 — it does not resume the step it was on.
+ */
+export async function sendBackReport(
+  id: string,
+  reason: string
+): Promise<ApprovalActionResult> {
+  await delay();
+  const report = findReport(id);
+  if (!report) throw new Error(`Report ${id} not found`);
+
+  const trimmedReason = reason.trim();
+  if (!trimmedReason) {
+    throw new Error("A reason is required to send a report back.");
+  }
+
+  // Resolve the acting approver before clearing the workflow state.
+  const approverId =
+    pendingApproverId(report) ?? currentApproverId(report) ?? "system";
+
+  // Reset the workflow: drop every approval-history entry (pending + decisions)
+  // so resubmission re-routes from the head of the payee's chain.
+  clearApprovalHistory(id);
+
+  const prevStatus = report.status;
+  const updated = patchReport(id, { status: "DRAFT" })!;
+  recordChange(id, approverId, "STATUS", "Sent back to employee", {
+    field: "status",
+    oldValue: prevStatus,
+    newValue: "DRAFT",
+    note: trimmedReason,
+  });
+
+  const notifications: MockEmail[] = [];
+  const submitter = userById(report.submitterId);
+  if (submitter) {
+    notifications.push(
+      sendMockEmail(
+        submitter.email,
+        `Returned for Revision: ${report.reportName}`,
+        `Your expense report (${report.reportName}) was returned by ${userName(approverId)} and is back in your drafts to edit and resubmit. Reason: ${trimmedReason}\n\nEdit it here: /reports/${id}/edit`
+      )
+    );
+  }
+  return { report: updated, notifications };
+}
+
 export async function markPaid(
   id: string,
   actorId?: string
@@ -914,6 +1016,53 @@ export async function createReceipt(
     id: newId("receipt"),
     userId: input.userId,
     uploadedById,
+    source: input.source ?? "UPLOAD",
+    imageUrl: input.imageUrl,
+    merchantName: input.merchantName,
+    merchantDate: input.merchantDate,
+    totalAmount: input.totalAmount,
+    taxAmount: input.taxAmount,
+    rawOcrData: input.rawOcrData,
+    isAttached: false,
+    createdAt: nowIso(),
+  });
+}
+
+/**
+ * Look up an ACTIVE user by email (case-insensitive). Used by the email-ingest
+ * endpoint to decide whether an inbound receipt maps to a known employee.
+ */
+export async function findActiveUserByEmail(
+  email: string
+): Promise<User | undefined> {
+  await delay();
+  const needle = email.trim().toLowerCase();
+  return listUsers().find(
+    (u) => u.isActive && u.email.toLowerCase() === needle
+  );
+}
+
+/**
+ * Persist a receipt that arrived by email. System-owned: there is no app user
+ * who "uploaded" it (uploadedById = null) and the source is EMAIL. Starts
+ * unattached, so it appears in the owner's gallery like any other capture.
+ * No gallery-access check — the caller (ingest endpoint) is trusted M2M.
+ */
+export async function createEmailReceipt(input: {
+  userId: string;
+  imageUrl: string;
+  merchantName?: string;
+  merchantDate?: string;
+  totalAmount?: number;
+  taxAmount?: number;
+  rawOcrData?: unknown;
+}): Promise<Receipt> {
+  await delay();
+  return insertReceipt({
+    id: newId("receipt"),
+    userId: input.userId,
+    uploadedById: null,
+    source: "EMAIL",
     imageUrl: input.imageUrl,
     merchantName: input.merchantName,
     merchantDate: input.merchantDate,

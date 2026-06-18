@@ -282,6 +282,9 @@ function aggregate(entries: LedgerEntry[]) {
   for (const e of entries) {
     const d = new Date(e.expenseDate);
     const m = d.getMonth();
+    // Skip entries without a valid date (e.g. incomplete draft line items):
+    // they can't be placed on the month axis and would index out of range.
+    if (Number.isNaN(m)) continue;
     if (d.getFullYear() === thisYear) monthly[m].current += e.amount;
     else if (d.getFullYear() === priorYear) monthly[m].prior += e.amount;
   }
@@ -294,6 +297,7 @@ function aggregate(entries: LedgerEntry[]) {
   });
   for (const e of entries) {
     const m = new Date(e.expenseDate).getMonth();
+    if (Number.isNaN(m)) continue;
     stacked[m][e.expenseTypeName] =
       (stacked[m][e.expenseTypeName] as number) + e.amount;
   }

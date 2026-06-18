@@ -4,16 +4,27 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useQuery } from "@tanstack/react-query";
-import { FilePlus2 } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { FilePlus2, Loader2, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 
 import { cn } from "@/lib/utils";
 import { formatCurrency, formatDate } from "@/lib/format";
-import { getMyReports } from "@/lib/data";
+import { deleteReport, getMyReports } from "@/lib/data";
+import { deletedReportMessage } from "@/lib/notify";
 import { useSession } from "@/lib/auth/mock-session";
-import type { ReportStatus } from "@/lib/types";
+import { dashboardKeys } from "@/components/dashboard/use-dashboard-data";
+import type { ExpenseReport, ReportStatus } from "@/lib/types";
 import { StatusPill } from "@/components/status-pill";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -30,11 +41,29 @@ const STATUSES: ReportStatus[] = [
 
 export default function MyExpensesPage() {
   const { user } = useSession();
+  const queryClient = useQueryClient();
   const [filter, setFilter] = React.useState<ReportStatus | "ALL">("ALL");
+  const [deleting, setDeleting] = React.useState<ExpenseReport | null>(null);
 
   const reportsQuery = useQuery({
     queryKey: ["dashboard", "my-reports", user.id],
     queryFn: () => getMyReports(user.id),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => deleteReport(id, user.id),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({
+        queryKey: ["dashboard", "my-reports", user.id],
+      });
+      queryClient.invalidateQueries({ queryKey: dashboardKeys.all });
+      // Returned receipts reappear in the gallery's Unattached list.
+      queryClient.invalidateQueries({ queryKey: ["receipts"] });
+      toast.success(deletedReportMessage(result.receiptsReturned));
+      setDeleting(null);
+    },
+    onError: (e) =>
+      toast.error(e instanceof Error ? e.message : "Could not delete report"),
   });
 
   const reports = React.useMemo(
@@ -59,7 +88,7 @@ export default function MyExpensesPage() {
             Your expense reports and their statuses.
           </p>
         </div>
-        <Button render={<Link href="/reports/new" />}>
+        <Button nativeButton={false} render={<Link href="/reports/new" />}>
           <FilePlus2 className="size-4" />
           New Expense
         </Button>
@@ -85,7 +114,7 @@ export default function MyExpensesPage() {
               <TableHead>Period</TableHead>
               <TableHead className="text-right">Total</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead className="text-right">Open</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -124,13 +153,27 @@ export default function MyExpensesPage() {
                     <StatusPill status={r.status} />
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      render={<Link href={`/reports/${r.id}/edit`} />}
-                    >
-                      Open
-                    </Button>
+                    <div className="flex items-center justify-end gap-1">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        nativeButton={false}
+                        render={<Link href={`/reports/${r.id}/edit`} />}
+                      >
+                        Open
+                      </Button>
+                      {r.status === "DRAFT" && (
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          className="text-muted-foreground hover:text-destructive"
+                          onClick={() => setDeleting(r)}
+                          aria-label={`Delete ${r.reportName}`}
+                        >
+                          <Trash2 className="size-4" />
+                        </Button>
+                      )}
+                    </div>
                   </TableCell>
                 </TableRow>
               ))
@@ -138,7 +181,54 @@ export default function MyExpensesPage() {
           </TableBody>
         </Table>
       </div>
+
+      <DeleteDraftDialog
+        report={deleting}
+        pending={deleteMutation.isPending}
+        onCancel={() => !deleteMutation.isPending && setDeleting(null)}
+        onConfirm={() => deleting && deleteMutation.mutate(deleting.id)}
+      />
     </div>
+  );
+}
+
+function DeleteDraftDialog({
+  report,
+  pending,
+  onCancel,
+  onConfirm,
+}: {
+  report: ExpenseReport | null;
+  pending: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <Dialog open={!!report} onOpenChange={(o) => !o && onCancel()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Delete draft report?</DialogTitle>
+          <DialogDescription>
+            &ldquo;{report?.reportName}&rdquo; will be permanently deleted. Any
+            receipts attached to it are returned to your Receipt Gallery (not
+            deleted), where you can reuse them.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button variant="outline" onClick={onCancel} disabled={pending}>
+            Cancel
+          </Button>
+          <Button variant="destructive" onClick={onConfirm} disabled={pending}>
+            {pending ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Trash2 className="size-4" />
+            )}
+            Delete report
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

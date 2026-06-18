@@ -31,7 +31,7 @@ import {
   getLedgerEntries,
   rejectReport,
 } from "@/lib/data";
-import { toastQueuedNotifications } from "@/lib/notify";
+import { deletedReportMessage, toastQueuedNotifications } from "@/lib/notify";
 import type { ExpenseReport, ReportRoutingRow } from "@/lib/types";
 import {
   useApprovalQueue,
@@ -90,10 +90,10 @@ export function KpiSection({ userId }: { userId: string }) {
     toast.error(err instanceof Error ? err.message : "Something went wrong");
 
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => deleteReport(id),
-    onSuccess: () => {
+    mutationFn: (id: string) => deleteReport(id, userId),
+    onSuccess: (result) => {
       invalidate();
-      toast.success("Draft deleted");
+      toast.success(deletedReportMessage(result.receiptsReturned));
     },
     onError: onMutationError,
   });

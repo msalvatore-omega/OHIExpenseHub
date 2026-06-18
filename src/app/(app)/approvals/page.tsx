@@ -101,6 +101,7 @@ function ApprovalsList() {
                     <Button
                       size="sm"
                       variant="outline"
+                      nativeButton={false}
                       render={<Link href={`/approvals/${report.id}`} />}
                     >
                       Review

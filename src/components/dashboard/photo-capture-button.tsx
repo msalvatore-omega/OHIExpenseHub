@@ -31,7 +31,7 @@ export function PhotoCaptureButton({
   return (
     <>
       <CameraCaptureButton
-        onFiles={enqueue}
+        onFiles={(files) => enqueue(files, "CAMERA")}
         processing={processingLabel !== null}
         className={className}
       />

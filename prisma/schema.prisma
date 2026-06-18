@@ -40,6 +40,13 @@ enum ReportChangeType {
   OTHER
 }
 
+/// How a receipt entered the system.
+enum ReceiptSource {
+  UPLOAD
+  CAMERA
+  EMAIL
+}
+
 model User {
   id          String   @id @default(cuid())
   // Null until the person's first Azure AD login, which matches them by email
@@ -83,8 +90,11 @@ model Receipt {
   userId       String
   owner        User      @relation("ReceiptOwner", fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   // Who actually uploaded it: a delegate, or the owner for self-uploads.
-  uploadedById String
-  uploadedBy   User      @relation("ReceiptUploader", fields: [uploadedById], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  // Null for system ingestion (e.g. an emailed-in receipt has no app user).
+  uploadedById String?
+  uploadedBy   User?     @relation("ReceiptUploader", fields: [uploadedById], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  // How the receipt entered the system (upload, camera capture, or email-in).
+  source       ReceiptSource @default(UPLOAD)
   imageUrl     String    @db.NVarChar(Max)
   merchantName String?   @db.NVarChar(200)
   merchantDate DateTime?
@@ -129,6 +139,8 @@ model ReportChangeLog {
   oldValue    String?          @db.NVarChar(Max)
   newValue    String?          @db.NVarChar(Max)
   summary     String           @db.NVarChar(500)
+  // Optional free-text detail (e.g. the approver's reason on a "send back").
+  note        String?          @db.NVarChar(Max)
 
   @@index([reportId, changedAt])
   @@index([changedById])

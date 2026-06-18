@@ -4,6 +4,7 @@ import * as React from "react";
 import { Loader2, Upload, UploadCloud } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import type { ReceiptSource } from "@/lib/types";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { CameraCaptureButton } from "@/components/gallery/camera-capture-button";
 
@@ -13,7 +14,7 @@ export function UploadZone({
   onFiles,
   processingLabel,
 }: {
-  onFiles: (files: File[]) => void;
+  onFiles: (files: File[], source?: ReceiptSource) => void;
   /** When set, a "Processing receipt…" indicator is shown. */
   processingLabel?: string | null;
 }) {
@@ -21,9 +22,10 @@ export function UploadZone({
   const [dragging, setDragging] = React.useState(false);
   const processing = processingLabel != null;
 
+  // Drag-drop and Browse are file uploads; the camera button reports CAMERA.
   const pick = (list: FileList | null) => {
     if (!list || list.length === 0) return;
-    onFiles(Array.from(list));
+    onFiles(Array.from(list), "UPLOAD");
   };
 
   return (
@@ -56,7 +58,7 @@ export function UploadZone({
         </div>
         <div className="flex flex-wrap items-center justify-center gap-2">
           <CameraCaptureButton
-            onFiles={onFiles}
+            onFiles={(files) => onFiles(files, "CAMERA")}
             processing={processing}
             iconClassName="size-4"
             className={cn(buttonVariants({ size: "sm" }))}
@@ -76,7 +78,7 @@ export function UploadZone({
       {/* Mobile: capture + upload — stacks on small phones, side-by-side on sm+ */}
       <div className="flex flex-col gap-3 sm:flex-row md:hidden">
         <CameraCaptureButton
-          onFiles={onFiles}
+          onFiles={(files) => onFiles(files, "CAMERA")}
           processing={processing}
           className={cn(buttonVariants(), "h-12 flex-1")}
         />

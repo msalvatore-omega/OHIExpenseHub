@@ -40,6 +40,13 @@
   --color-primary-hover: var(--primary-hover);
   --color-primary-foreground: var(--primary-foreground);
   --color-primary: var(--primary);
+  /* Tonal-blue dashboard action tiles (one hue, varied weight). */
+  --color-action-primary: var(--action-primary);
+  --color-action-primary-hover: var(--action-primary-hover);
+  --color-action-primary-foreground: var(--action-primary-foreground);
+  --color-action-tint: var(--action-tint);
+  --color-action-tint-hover: var(--action-tint-hover);
+  --color-action-tint-foreground: var(--action-tint-foreground);
   --color-surface: var(--surface);
   --color-popover-foreground: var(--popover-foreground);
   --color-popover: var(--popover);
@@ -73,6 +80,18 @@
   --primary: #0b2545;
   --primary-hover: #13315c;
   --primary-foreground: #ffffff;
+
+  /*
+   * Dashboard action tiles — a single brand-blue family in varied weight.
+   * Primary action = deep solid blue on white; secondary actions = a soft tint
+   * of the same hue with deep-blue text/icon. (See .dark for the inverted set.)
+   */
+  --action-primary: #1f4e79;
+  --action-primary-hover: #1a4267;
+  --action-primary-foreground: #ffffff;
+  --action-tint: #e6f1fb;
+  --action-tint-hover: #d3e6f8;
+  --action-tint-foreground: #0c447c;
 
   --accent: #c8a02e;
   --accent-hover: #b08c22;
@@ -126,6 +145,14 @@
   --primary: #13315c;
   --primary-hover: #1b4574;
   --primary-foreground: #ffffff;
+
+  /* Action tiles, dark: tint becomes a deep blue surface, text a light blue. */
+  --action-primary: #2a5d8f;
+  --action-primary-hover: #336aa0;
+  --action-primary-foreground: #ffffff;
+  --action-tint: #16304d;
+  --action-tint-hover: #1e3e63;
+  --action-tint-foreground: #bcdcff;
 
   --accent: #d4b24a;
   --accent-hover: #c8a02e;

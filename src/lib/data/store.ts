@@ -56,6 +56,7 @@ export function getDb(): Database {
   }
   for (const r of db.receipts) {
     if (r.uploadedById === undefined) r.uploadedById = r.userId;
+    if (r.source === undefined) r.source = "UPLOAD";
   }
   persist();
   return db;
@@ -320,6 +321,15 @@ export function insertApprovalHistory(entry: ApprovalHistory): ApprovalHistory {
   getDb().approvalHistory.push(entry);
   persist();
   return entry;
+}
+
+/** Drop all approval-history entries for a report (resets the workflow). */
+export function clearApprovalHistory(reportId: string): void {
+  const data = getDb();
+  data.approvalHistory = data.approvalHistory.filter(
+    (h) => h.reportId !== reportId
+  );
+  persist();
 }
 
 // ---- Report change log (audit trail) ----

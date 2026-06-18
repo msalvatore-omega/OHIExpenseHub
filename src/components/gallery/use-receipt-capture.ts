@@ -10,7 +10,7 @@ import { toast } from "sonner";
 
 import { OcrTimeoutError, processReceipt } from "@/lib/data/ocr";
 import { createReceipt } from "@/lib/data";
-import type { CreateReceiptInput } from "@/lib/types";
+import type { CreateReceiptInput, ReceiptSource } from "@/lib/types";
 import type { ReviewItem } from "@/components/gallery/ocr-review-modal";
 
 type SavePayload = Pick<
@@ -19,8 +19,11 @@ type SavePayload = Pick<
 >;
 
 export interface ReceiptCapture {
-  /** Queue captured/selected files for OCR processing. */
-  enqueue: (files: File[]) => void;
+  /**
+   * Queue captured/selected files for OCR processing. `source` records how they
+   * were captured (camera vs file upload); defaults to UPLOAD.
+   */
+  enqueue: (files: File[], source?: ReceiptSource) => void;
   /** The item currently awaiting review, if any (drives the review modal). */
   review: ReviewItem | null;
   saving: boolean;
@@ -45,8 +48,11 @@ export function useReceiptCapture({
   /** Success-toast copy shown when a reviewed receipt is saved. */
   savedMessage?: string;
 }): ReceiptCapture {
-  const queueRef = React.useRef<File[]>([]);
+  const queueRef = React.useRef<{ file: File; source: ReceiptSource }[]>([]);
   const busyRef = React.useRef(false);
+  // Source of the item currently being processed (camera vs upload), applied
+  // when the receipt is finally persisted.
+  const currentSourceRef = React.useRef<ReceiptSource>("UPLOAD");
   // Holds the latest pump() so the async worker can advance the queue without
   // referencing itself (avoids a stale self-recursive closure).
   const pumpRef = React.useRef<() => void>(() => {});
@@ -57,9 +63,11 @@ export function useReceiptCapture({
 
   const pump = React.useCallback(() => {
     if (busyRef.current) return;
-    const file = queueRef.current.shift();
+    const item = queueRef.current.shift();
     setQueuedCount(queueRef.current.length);
-    if (!file) return;
+    if (!item) return;
+    const { file, source } = item;
+    currentSourceRef.current = source;
     busyRef.current = true;
 
     void (async () => {
@@ -75,7 +83,12 @@ export function useReceiptCapture({
         setProcessing(null);
         if (err instanceof OcrTimeoutError) {
           try {
-            await createReceipt({ userId, uploadedById, imageUrl: previewUrl });
+            await createReceipt({
+              userId,
+              uploadedById,
+              source: currentSourceRef.current,
+              imageUrl: previewUrl,
+            });
             onSaved?.();
             toast.warning(
               "OCR timed out — receipt saved, please fill in details manually."
@@ -100,9 +113,9 @@ export function useReceiptCapture({
   }, [pump]);
 
   const enqueue = React.useCallback(
-    (files: File[]) => {
+    (files: File[], source: ReceiptSource = "UPLOAD") => {
       if (files.length === 0) return;
-      queueRef.current.push(...files);
+      queueRef.current.push(...files.map((file) => ({ file, source })));
       setQueuedCount(queueRef.current.length);
       pump();
     },
@@ -117,6 +130,7 @@ export function useReceiptCapture({
         await createReceipt({
           userId,
           uploadedById,
+          source: currentSourceRef.current,
           imageUrl: review.previewUrl,
           ...data,
         });
