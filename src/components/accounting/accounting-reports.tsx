@@ -49,11 +49,9 @@ import type {
 } from "@/lib/types";
 import { ReportStatusSelect } from "@/components/reports/report-status-select";
 import { ChangeHistoryDialog } from "@/components/reports/report-change-history";
-import { DuplicateDetection } from "@/components/accounting/duplicate-detection";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Table,
   TableBody,
@@ -142,63 +140,53 @@ function matchesPerson(
   return submitterId === filter.personId || paidToId === filter.personId;
 }
 
+/** Expense Reports list with person/period/status filters. */
 export function AccountingReports() {
   const { role } = useSession();
   const showCodes = role === "ADMIN" || role === "ACCOUNTING";
-
   const [filter, setFilter] = React.useState<PeopleFilter>(EMPTY_FILTER);
-  // Status multi-select is specific to the Reports tab's list.
   const [statuses, setStatuses] = React.useState<ReportStatus[]>([]);
-
   const users = useQuery({ queryKey: ["users"], queryFn: getUsers });
 
-  const filters = (
-    <ReportFilters
-      filter={filter}
-      onChange={setFilter}
-      users={users.data ?? []}
-    />
+  return (
+    <div className="flex flex-col gap-4">
+      <ReportFilters
+        filter={filter}
+        onChange={setFilter}
+        users={users.data ?? []}
+        statuses={statuses}
+        onStatusChange={setStatuses}
+      />
+      <ReportsTab filter={filter} statuses={statuses} showCodes={showCodes} />
+    </div>
   );
+}
 
-  // Reports tab gets the same person/period filters plus a status filter.
-  const reportsFilters = (
-    <ReportFilters
-      filter={filter}
-      onChange={setFilter}
-      users={users.data ?? []}
-      statuses={statuses}
-      onStatusChange={setStatuses}
-    />
-  );
+/** Expense-Type Summary with person/period filters. */
+export function AccountingExpenseTypeSummary() {
+  const { role } = useSession();
+  const showCodes = role === "ADMIN" || role === "ACCOUNTING";
+  const [filter, setFilter] = React.useState<PeopleFilter>(EMPTY_FILTER);
+  const users = useQuery({ queryKey: ["users"], queryFn: getUsers });
 
   return (
-    <Tabs defaultValue="reports">
-      <TabsList>
-        <TabsTrigger value="reports">Reports</TabsTrigger>
-        <TabsTrigger value="summary">Expense-Type Summary</TabsTrigger>
-        <TabsTrigger value="duplicates">Duplicate Detection</TabsTrigger>
-        <TabsTrigger value="changelog">Change Log</TabsTrigger>
-      </TabsList>
+    <div className="flex flex-col gap-4">
+      <ReportFilters filter={filter} onChange={setFilter} users={users.data ?? []} />
+      <ExpenseTypeSummaryTab filter={filter} showCodes={showCodes} />
+    </div>
+  );
+}
 
-      <TabsContent value="reports" className="flex flex-col gap-4 pt-4">
-        {reportsFilters}
-        <ReportsTab filter={filter} statuses={statuses} showCodes={showCodes} />
-      </TabsContent>
+/** Change Log with person/period filters. */
+export function AccountingChangeLog() {
+  const [filter, setFilter] = React.useState<PeopleFilter>(EMPTY_FILTER);
+  const users = useQuery({ queryKey: ["users"], queryFn: getUsers });
 
-      <TabsContent value="summary" className="flex flex-col gap-4 pt-4">
-        {filters}
-        <ExpenseTypeSummaryTab filter={filter} showCodes={showCodes} />
-      </TabsContent>
-
-      <TabsContent value="duplicates" className="pt-4">
-        <DuplicateDetection />
-      </TabsContent>
-
-      <TabsContent value="changelog" className="flex flex-col gap-4 pt-4">
-        {filters}
-        <ChangeLogTab filter={filter} />
-      </TabsContent>
-    </Tabs>
+  return (
+    <div className="flex flex-col gap-4">
+      <ReportFilters filter={filter} onChange={setFilter} users={users.data ?? []} />
+      <ChangeLogTab filter={filter} />
+    </div>
   );
 }
 

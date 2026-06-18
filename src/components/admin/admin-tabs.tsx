@@ -105,7 +105,7 @@ export function AdminTabs() {
 
 // ---------------- Users ----------------
 
-function UsersTab() {
+export function UsersTab() {
   const qc = useQueryClient();
   const users = useQuery({ queryKey: ["users"], queryFn: getUsers });
   const [editing, setEditing] = React.useState<User | null>(null);
@@ -751,7 +751,7 @@ function EditUserDialog({
 
 // ---------------- Delegates ----------------
 
-function DelegatesTab() {
+export function DelegatesTab() {
   const qc = useQueryClient();
   const delegates = useQuery({ queryKey: ["delegates"], queryFn: getDelegates });
   const users = useQuery({ queryKey: ["users"], queryFn: getUsers });
@@ -874,7 +874,7 @@ function DelegatesTab() {
 
 // ---------------- Approval Groups ----------------
 
-function ApprovalGroupsTab() {
+export function ApprovalGroupsTab() {
   const qc = useQueryClient();
   const groups = useQuery({
     queryKey: ["approval-groups"],
@@ -1075,7 +1075,7 @@ function GroupCard({
 
 // ---------------- Expense Types ----------------
 
-function ExpenseTypesTab() {
+export function ExpenseTypesTab() {
   const qc = useQueryClient();
   const types = useQuery({ queryKey: ["expense-types"], queryFn: getExpenseTypes });
   const [editing, setEditing] = React.useState<ExpenseType | null>(null);
@@ -1233,7 +1233,7 @@ function ExpenseTypeDialog({
 
 // ---------------- System ----------------
 
-function SystemTab() {
+export function SystemTab() {
   const qc = useQueryClient();
   const settings = useSystemSettings();
   const current = settings.data;

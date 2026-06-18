@@ -1,20 +1,38 @@
 import Link from "next/link";
-import { BarChart3, FileText } from "lucide-react";
+import { BarChart3, Copy, FileText, History, Tag } from "lucide-react";
 
 import { RoleGuard } from "@/components/role-guard";
 
 const LINKS = [
   {
-    href: "/accounting/reports",
-    icon: FileText,
-    title: "Reports",
-    description: "Process payments, export, and review duplicates.",
-  },
-  {
     href: "/accounting/analytics",
     icon: BarChart3,
     title: "Analytics",
     description: "Spend trends by type, department, and submitter.",
+  },
+  {
+    href: "/accounting/reports",
+    icon: FileText,
+    title: "Expense Reports",
+    description: "Review, pay, and export approved reports.",
+  },
+  {
+    href: "/accounting/expense-types",
+    icon: Tag,
+    title: "Expense Type Summary",
+    description: "Spend totaled by expense category with GL codes.",
+  },
+  {
+    href: "/accounting/duplicates",
+    icon: Copy,
+    title: "Duplicate Detection",
+    description: "Identify potential duplicate expense submissions.",
+  },
+  {
+    href: "/accounting/change-log",
+    icon: History,
+    title: "Change Log",
+    description: "Audit trail of all report status and field changes.",
   },
 ];
 
@@ -25,10 +43,10 @@ export default function AccountingPage() {
         <header>
           <h1>Accounting</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Payments, exports, and spend analytics.
+            Payments, exports, analytics, and audit tools.
           </p>
         </header>
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {LINKS.map((l) => (
             <Link
               key={l.href}

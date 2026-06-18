@@ -1,17 +1,17 @@
-import { AccountingReports } from "@/components/accounting/accounting-reports";
+import { AccountingExpenseTypeSummary } from "@/components/accounting/accounting-reports";
 import { RoleGuard } from "@/components/role-guard";
 
-export default function AccountingReportsPage() {
+export default function AccountingExpenseTypesPage() {
   return (
     <RoleGuard allow={["ACCOUNTING", "ADMIN"]}>
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-6 py-8">
         <header>
-          <h1>Accounting — Expense Reports</h1>
+          <h1>Accounting — Expense Type Summary</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Review reports, update status, export, and mark as paid.
+            Spend totaled by expense type with optional GL code detail.
           </p>
         </header>
-        <AccountingReports />
+        <AccountingExpenseTypeSummary />
       </div>
     </RoleGuard>
   );

@@ -6,12 +6,19 @@ import {
   BarChart3,
   Calculator,
   ClipboardCheck,
+  Copy,
   FilePlus2,
   FileText,
+  History,
   Home,
   Images,
+  Network,
   ReceiptText,
+  Settings,
   Shield,
+  Tag,
+  UserCheck,
+  Users,
 } from "lucide-react";
 
 import type { UserRole } from "@/lib/types";
@@ -47,9 +54,24 @@ export const NAV_ITEMS: NavItem[] = [
     children: [
       { label: "Analytics", href: "/accounting/analytics", icon: BarChart3 },
       { label: "Expense Reports", href: "/accounting/reports", icon: FileText },
+      { label: "Expense Types", href: "/accounting/expense-types", icon: Tag },
+      { label: "Duplicates", href: "/accounting/duplicates", icon: Copy },
+      { label: "Change Log", href: "/accounting/change-log", icon: History },
     ],
   },
-  { label: "Admin", href: "/admin", icon: Shield, roles: ["ADMIN"] },
+  {
+    label: "Admin",
+    href: "/admin",
+    icon: Shield,
+    roles: ["ADMIN"],
+    children: [
+      { label: "Users", href: "/admin/users", icon: Users },
+      { label: "Delegates", href: "/admin/delegates", icon: UserCheck },
+      { label: "Expense Types", href: "/admin/expense-types", icon: Tag },
+      { label: "Approval Groups", href: "/admin/approval-groups", icon: Network },
+      { label: "System", href: "/admin/system", icon: Settings },
+    ],
+  },
 ];
 
 /** Items the given role is allowed to see, in nav order. */
