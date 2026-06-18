@@ -1,66 +1,106 @@
 "use client";
 
-// Mock login. No real auth — "Sign in" just routes into the app using the
-// existing mock session (default ADMIN, adjustable via the dev role switcher).
+// Mock login. Lists all active seed users so you can sign in as any persona.
+// No real auth — selecting a user sets the mock session and routes into the app.
 
 import { useRouter } from "next/navigation";
 
+import { cn } from "@/lib/utils";
 import { APP_NAME } from "@/lib/constants";
+import { createSeedData } from "@/lib/data/seed";
+import type { User, UserRole } from "@/lib/types";
 import { useSession } from "@/lib/auth/mock-session";
 import { clearAnnouncementDismissal } from "@/components/announcement-banner";
 import { BrandLogo } from "@/components/brand-logo";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 
-function MicrosoftLogo() {
+const SEED_USERS = createSeedData().users.filter((u) => u.isActive);
+
+const ROLE_ORDER: UserRole[] = ["ADMIN", "APPROVER", "ACCOUNTING", "SUBMITTER"];
+const ROLE_LABEL: Record<UserRole, string> = {
+  ADMIN: "Admin",
+  APPROVER: "Approver",
+  ACCOUNTING: "Accounting",
+  SUBMITTER: "Submitter",
+};
+const ROLE_BADGE: Record<UserRole, string> = {
+  ADMIN: "bg-violet-100 text-violet-800 dark:bg-violet-950 dark:text-violet-300",
+  APPROVER: "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300",
+  ACCOUNTING: "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300",
+  SUBMITTER: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
+};
+
+function initials(name: string): string {
+  return name
+    .split(" ")
+    .map((p) => p[0])
+    .filter(Boolean)
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+}
+
+function UserRow({ user, onSelect }: { user: User; onSelect: () => void }) {
   return (
-    <svg width="18" height="18" viewBox="0 0 21 21" aria-hidden="true">
-      <rect x="1" y="1" width="9" height="9" fill="#F25022" />
-      <rect x="11" y="1" width="9" height="9" fill="#7FBA00" />
-      <rect x="1" y="11" width="9" height="9" fill="#00A4EF" />
-      <rect x="11" y="11" width="9" height="9" fill="#FFB900" />
-    </svg>
+    <button
+      type="button"
+      onClick={onSelect}
+      className="flex w-full items-center gap-3 rounded-lg border border-border px-3 py-2.5 text-left transition-colors hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-semibold">
+        {initials(user.name)}
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium">{user.name}</p>
+        <p className="truncate text-xs text-muted-foreground">{user.department}</p>
+      </div>
+      <span
+        className={cn(
+          "shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold",
+          ROLE_BADGE[user.role]
+        )}
+      >
+        {ROLE_LABEL[user.role]}
+      </span>
+    </button>
   );
 }
 
 export default function LoginPage() {
   const router = useRouter();
-  const { role, setRole } = useSession();
+  const { setUser } = useSession();
 
-  function handleSignIn() {
-    // A login starts a fresh session: clear any prior in-tab banner dismissal so
-    // the announcement shows again (sessionStorage alone would survive re-login
-    // within the same tab).
+  const grouped = ROLE_ORDER.map((role) => ({
+    role,
+    users: SEED_USERS.filter((u) => u.role === role),
+  })).filter((g) => g.users.length > 0);
+
+  function handleSelect(user: User) {
     clearAnnouncementDismissal();
-    // "Set" the mock session (re-affirm the current role) and enter the app.
-    setRole(role);
+    setUser(user);
     router.push("/dashboard");
   }
 
   return (
-    <main className="flex flex-1 items-center justify-center px-6 py-16">
+    <main className="flex flex-1 items-center justify-center px-6 py-12">
       <Card className="w-full max-w-sm">
-        <CardHeader className="items-center text-center">
-          <BrandLogo className="mb-3 size-16" />
+        <CardHeader className="items-center text-center pb-4">
+          <BrandLogo className="mb-3 size-14" />
           <CardTitle className="text-xl">{APP_NAME}</CardTitle>
-          <CardDescription>Employee expense management</CardDescription>
+          <CardDescription>Select a prototype user to sign in as</CardDescription>
         </CardHeader>
-        <CardContent className="flex flex-col items-center gap-3">
-          <Button
-            onClick={handleSignIn}
-            variant="outline"
-            className="w-full gap-2"
-          >
-            <MicrosoftLogo />
-            Sign in with Microsoft
-          </Button>
-          <p className="text-center text-xs text-muted-foreground">
+        <CardContent className="flex flex-col gap-4">
+          {grouped.map(({ role, users }) => (
+            <div key={role} className="flex flex-col gap-1.5">
+              <p className="px-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                {ROLE_LABEL[role]}
+              </p>
+              {users.map((u) => (
+                <UserRow key={u.id} user={u} onSelect={() => handleSelect(u)} />
+              ))}
+            </div>
+          ))}
+          <p className="text-center text-[11px] text-muted-foreground pt-1">
             Prototype — authentication is simulated.
           </p>
         </CardContent>
