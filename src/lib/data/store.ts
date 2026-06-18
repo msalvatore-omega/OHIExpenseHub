@@ -5,6 +5,7 @@
 
 import { STORAGE_KEY } from "@/lib/constants";
 import {
+  buildExpenseTypes,
   buildSystemSettings,
   createSeedData,
   type Database,
@@ -54,6 +55,14 @@ export function getDb(): Database {
   // Forward-compat: older persisted snapshots predate some collections/fields.
   if (!db.changeLogs) db.changeLogs = [];
   if (!db.systemSettings) db.systemSettings = buildSystemSettings();
+  // Replace legacy expense types (pre-GL-coding) wholesale with the new GL set.
+  if (
+    db.expenseTypes.some(
+      (t) => (t as { glCode?: string }).glCode === undefined
+    )
+  ) {
+    db.expenseTypes = buildExpenseTypes();
+  }
   for (const u of db.users) {
     if (u.isActive === undefined) u.isActive = true;
     if (u.approver1Id === undefined) u.approver1Id = null;

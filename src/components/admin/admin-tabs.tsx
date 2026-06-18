@@ -835,7 +835,8 @@ function ExpenseTypesTab() {
           <TableHeader>
             <TableRow>
               <TableHead>Display Name</TableHead>
-              <TableHead>Accounting Code</TableHead>
+              <TableHead>GL Code</TableHead>
+              <TableHead>GL Name</TableHead>
               <TableHead>Mileage</TableHead>
               <TableHead className="text-right">Edit</TableHead>
             </TableRow>
@@ -844,7 +845,8 @@ function ExpenseTypesTab() {
             {(types.data ?? []).map((t) => (
               <TableRow key={t.id}>
                 <TableCell className="font-medium">{t.displayName}</TableCell>
-                <TableCell className="tabular-nums">{t.accountingCode}</TableCell>
+                <TableCell className="tabular-nums">{t.glCode}</TableCell>
+                <TableCell>{t.glName}</TableCell>
                 <TableCell>{t.isMileage ? "Yes" : "No"}</TableCell>
                 <TableCell className="text-right">
                   <Button variant="outline" size="sm" onClick={() => setEditing(t)}>
@@ -889,14 +891,16 @@ function ExpenseTypeDialog({
   onSaved: () => void;
 }) {
   const [displayName, setDisplayName] = React.useState("");
-  const [accountingCode, setAccountingCode] = React.useState("");
+  const [glCode, setGlCode] = React.useState("");
+  const [glName, setGlName] = React.useState("");
   const [isMileage, setIsMileage] = React.useState(false);
 
   React.useEffect(() => {
     if (open) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setDisplayName(type?.displayName ?? "");
-      setAccountingCode(type?.accountingCode ?? "");
+      setGlCode(type?.glCode ?? "");
+      setGlName(type?.glName ?? "");
       setIsMileage(type?.isMileage ?? false);
     }
   }, [open, type]);
@@ -904,8 +908,8 @@ function ExpenseTypeDialog({
   const mutation = useMutation({
     mutationFn: () =>
       isNew
-        ? createExpenseType({ displayName, accountingCode, isMileage })
-        : updateExpenseType(type!.id, { displayName, accountingCode, isMileage }),
+        ? createExpenseType({ displayName, glCode, glName, isMileage })
+        : updateExpenseType(type!.id, { displayName, glCode, glName, isMileage }),
     onSuccess: () => {
       toast.success(isNew ? "Type added" : "Type updated");
       onSaved();
@@ -925,10 +929,19 @@ function ExpenseTypeDialog({
             <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
           </label>
           <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
-            Accounting Code
+            GL Code
             <Input
-              value={accountingCode}
-              onChange={(e) => setAccountingCode(e.target.value)}
+              value={glCode}
+              onChange={(e) => setGlCode(e.target.value)}
+              placeholder="MR5100501000"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+            GL Name
+            <Input
+              value={glName}
+              onChange={(e) => setGlName(e.target.value)}
+              placeholder="Business Travel"
             />
           </label>
           <label className="flex items-center gap-2 text-sm">

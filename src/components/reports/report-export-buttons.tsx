@@ -14,6 +14,7 @@ import {
   getUsers,
 } from "@/lib/data";
 import { exportReportToExcel } from "@/lib/export/excel";
+import { canSeeGlDetails } from "@/lib/expense-type";
 import { useSession } from "@/lib/auth/mock-session";
 import { Button } from "@/components/ui/button";
 
@@ -56,7 +57,7 @@ export function ReportExportButtons({ reportId }: { reportId: string }) {
         usersById: new Map(usersQuery.data!.map((u) => [u.id, u])),
         typesById: new Map(typesQuery.data!.map((t) => [t.id, t])),
         receiptsById: new Map(receiptsQuery.data!.map((r) => [r.id, r])),
-        includeAccountingCode: role === "ADMIN" || role === "ACCOUNTING",
+        includeGlColumns: canSeeGlDetails(role),
       });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Export failed");

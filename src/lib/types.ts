@@ -101,7 +101,10 @@ export interface ExpenseLineItem {
 export interface ExpenseType {
   id: string;
   displayName: string;
-  accountingCode: string;
+  /** GL (general-ledger) code, e.g. "MR5100501000". */
+  glCode: string;
+  /** GL name / description, e.g. "Business Travel". */
+  glName: string;
   isMileage: boolean;
 }
 
@@ -305,7 +308,8 @@ export interface LedgerEntry {
   paidToName: string;
   expenseTypeId: string;
   expenseTypeName: string;
-  accountingCode: string;
+  glCode: string;
+  glName: string;
   amount: number;
   expenseDate: string;
   periodFrom: string;
@@ -340,7 +344,8 @@ export interface DelegateInput {
 
 export interface ExpenseTypeInput {
   displayName: string;
-  accountingCode: string;
+  glCode: string;
+  glName: string;
   isMileage: boolean;
 }
 

@@ -47,6 +47,8 @@ const U = {
   accounting: "user-tom-accounting",
 } as const;
 
+// Stable ids for the expense types referenced by the seed report line items.
+// These reuse the matching new types so existing reports still resolve.
 const ET = {
   conference: "etype-conference",
   travel: "etype-business-travel",
@@ -161,17 +163,44 @@ function buildDelegates(): Delegate[] {
   ];
 }
 
-function buildExpenseTypes(): ExpenseType[] {
+export function buildExpenseTypes(): ExpenseType[] {
+  // The 26 GL-coded expense types (incl. Mileage). IDs for types that match a
+  // pre-existing category reuse the old id so seeded report line items resolve.
+  const t = (
+    id: string,
+    displayName: string,
+    glCode: string,
+    glName: string
+  ): ExpenseType => ({ id, displayName, glCode, glName, isMileage: false });
+
   return [
-    { id: ET.conference, displayName: "Conference", accountingCode: "502100", isMileage: false },
-    { id: ET.travel, displayName: "Business Travel", accountingCode: "501000", isMileage: false },
-    { id: ET.mealsLocal, displayName: "Meals-Local", accountingCode: "501010", isMileage: false },
-    { id: ET.education, displayName: "Education & Training", accountingCode: "502110", isMileage: false },
-    { id: ET.entertainment, displayName: "Entertainment", accountingCode: "501020", isMileage: false },
-    { id: ET.supplies, displayName: "Supplies", accountingCode: "501120", isMileage: false },
-    { id: ET.subscription, displayName: "Subscription/Dues", accountingCode: "502000", isMileage: false },
-    { id: ET.other, displayName: "Other Expenses", accountingCode: "509000", isMileage: false },
-    { id: ET.mileage, displayName: "Mileage", accountingCode: "501030", isMileage: true },
+    t(ET.travel, "Travel", "MR5100501000", "Business Travel"),
+    t("etype-travel-ops", "Travel Ops", "MR5100501001", "Business Travel - Ops"),
+    t("etype-travel-ir", "Travel IR", "MR5100501002", "Business Travel - IR"),
+    t("etype-travel-fin", "Travel Fin", "MR5100501003", "Business Travel - Fin"),
+    t(ET.mealsLocal, "Meals", "MR5100501010", "Meals"),
+    t(ET.entertainment, "Entertainment", "MR5100501020", "Entertainment Expense"),
+    t("etype-phone", "Phone", "MR5100501050", "Occupancy Exp - Communications"),
+    t(ET.supplies, "Supplies", "MR5100501120", "Supplies & Equip Exp"),
+    t(ET.conference, "Conference", "MR5100502100", "Conferences Other"),
+    t("etype-contributions", "Contributions", "MR5100502160", "Donations & Contributions"),
+    t(ET.subscription, "Prof Dues", "MR5100502000", "Prof Dues - Business"),
+    t(ET.education, "Education", "MR5100502110", "Education"),
+    t("etype-directors", "Directors", "MR5100500230", "Public Co Exp-Directors Fees"),
+    t(ET.other, "Gift", "MR5100600000", "Misc Exp - Admin"),
+    t("etype-postage", "Postage", "MR5100502150", "Postage & Courier Exp"),
+    t("etype-it", "IT", "MR5100501230", "Computer Hardware"),
+    t("etype-donations", "Donations", "MR5100502160", "Donations & Contributions"),
+    t("etype-prepaid", "Prepaid", "MR1810001007", "PPD Exp - Conferences"),
+    t("etype-ndr", "NDR", "MR5100502101", "NDR / Investor Conferences"),
+    t("etype-nic", "NIC", "MR5100502102", "NIC"),
+    t("etype-operator", "Operator", "MR5100502103", "Operator Conference"),
+    t("etype-recruiting", "Recruiting", "MR5100500020", "Recruiting Fees"),
+    t("etype-state", "State", "MR5100500320", "State Tax Expense"),
+    t("etype-software", "Computer Software EXP", "MR5100501220", "Software Exp"),
+    t("etype-ait", "AIT", "MR4000003050", "Revenue - AIT - Admin in Training"),
+    // Mileage: GL code blank for now (fillable later from the Admin tab).
+    { id: ET.mileage, displayName: "Mileage", glCode: "", glName: "Mileage", isMileage: true },
   ];
 }
 

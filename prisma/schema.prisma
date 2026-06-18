@@ -107,6 +107,18 @@ model Receipt {
   @@index([uploadedById])
 }
 
+/// Expense category with its general-ledger coding. SUBMITTER / APPROVER see
+/// only displayName; ACCOUNTING / ADMIN also see glCode + glName.
+model ExpenseType {
+  id          String  @id @default(cuid())
+  displayName String  @db.NVarChar(200)
+  // GL (general-ledger) code, e.g. "MR5100501000".
+  glCode      String  @db.NVarChar(30)
+  // GL name / description, e.g. "Business Travel".
+  glName      String  @db.NVarChar(255)
+  isMileage   Boolean @default(false)
+}
+
 model ExpenseReport {
   id           String       @id @default(cuid())
   reportName   String       @db.NVarChar(200)

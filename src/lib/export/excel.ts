@@ -68,7 +68,8 @@ const HEADERS = [
   "Period To",
   "Expense Date",
   "Expense Type",
-  "Accounting Code",
+  "GL Code",
+  "GL Name",
   "Purpose",
   "Description",
   "City",
@@ -83,7 +84,7 @@ const HEADERS = [
   "Approval Date",
 ] as const;
 
-const CURRENCY_COLS = [15, 17]; // Amount, Calculated Amount
+const CURRENCY_COLS = [16, 18]; // Amount, Calculated Amount
 const CURRENCY_FMT = '"$"#,##0.00';
 
 export interface ExcelExportContext {
@@ -91,13 +92,12 @@ export interface ExcelExportContext {
   usersById: Map<string, User>;
   typesById: Map<string, ExpenseType>;
   receiptsById: Map<string, Receipt>;
-  /** Only ADMIN / ACCOUNTING see accounting codes. */
-  includeAccountingCode: boolean;
+  /** Only ADMIN / ACCOUNTING see GL code + GL name. */
+  includeGlColumns: boolean;
 }
 
 export function exportReportToExcel(ctx: ExcelExportContext): void {
-  const { report, usersById, typesById, receiptsById, includeAccountingCode } =
-    ctx;
+  const { report, usersById, typesById, receiptsById, includeGlColumns } = ctx;
 
   const name = (id?: string) => (id && usersById.get(id)?.name) || "";
   const ownerId = report.onBehalfOfId ?? report.submitterId;
@@ -125,7 +125,8 @@ export function exportReportToExcel(ctx: ExcelExportContext): void {
       report.periodTo,
       li.expenseDate,
       type?.displayName ?? "",
-      includeAccountingCode ? type?.accountingCode ?? "" : "",
+      includeGlColumns ? type?.glCode ?? "" : "",
+      includeGlColumns ? type?.glName ?? "" : "",
       li.purposeOfTrip,
       li.description,
       li.city,

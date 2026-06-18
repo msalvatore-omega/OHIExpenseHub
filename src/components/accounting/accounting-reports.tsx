@@ -3,7 +3,7 @@
 // Accounting → Reports, organized into three tabs:
 //   1. Reports          — sortable, filterable payable-report listing (row opens
 //                          a read-only detail; per-row PDF/Excel + Mark as Paid).
-//   2. Expense-Type      — spend grouped by expense type (accounting code gated).
+//   2. Expense-Type      — spend grouped by expense type (GL code/name gated).
 //   3. Duplicate         — AI duplicate detection.
 // Tabs 1 & 2 share a Person + Period filter.
 
@@ -463,7 +463,7 @@ function ReportsTab({
                   usersById={usersById}
                   typesById={typesById}
                   receiptsById={receiptsById}
-                  includeAccountingCode={showCodes}
+                  includeGlColumns={showCodes}
                   onMarkPaid={() => markPaidMutation.mutate(report.id)}
                   markPaidPending={
                     markPaidMutation.isPending &&
@@ -525,7 +525,7 @@ function RowActionCells({
   usersById,
   typesById,
   receiptsById,
-  includeAccountingCode,
+  includeGlColumns,
   onMarkPaid,
   markPaidPending,
 }: {
@@ -533,7 +533,7 @@ function RowActionCells({
   usersById: Map<string, User>;
   typesById: Map<string, ExpenseType>;
   receiptsById: Map<string, Receipt>;
-  includeAccountingCode: boolean;
+  includeGlColumns: boolean;
   onMarkPaid: () => void;
   markPaidPending: boolean;
 }) {
@@ -551,7 +551,7 @@ function RowActionCells({
         usersById,
         typesById,
         receiptsById,
-        includeAccountingCode,
+        includeGlColumns,
       });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Export failed");
@@ -632,7 +632,13 @@ function ExpenseTypeSummaryTab({
   const summary = React.useMemo(() => {
     const map = new Map<
       string,
-      { name: string; code: string; total: number; reportIds: Set<string> }
+      {
+        name: string;
+        glCode: string;
+        glName: string;
+        total: number;
+        reportIds: Set<string>;
+      }
     >();
     for (const e of ledger.data ?? []) {
       if (!matchesPerson(e.submitterId, e.paidToId, filter)) continue;
@@ -640,7 +646,8 @@ function ExpenseTypeSummaryTab({
       const cur =
         map.get(e.expenseTypeId) ?? {
           name: e.expenseTypeName,
-          code: e.accountingCode,
+          glCode: e.glCode,
+          glName: e.glName,
           total: 0,
           reportIds: new Set<string>(),
         };
@@ -651,7 +658,8 @@ function ExpenseTypeSummaryTab({
     return [...map.values()]
       .map((s) => ({
         name: s.name,
-        code: s.code,
+        glCode: s.glCode,
+        glName: s.glName,
         total: s.total,
         count: s.reportIds.size,
       }))
@@ -664,7 +672,8 @@ function ExpenseTypeSummaryTab({
         <TableHeader>
           <TableRow>
             <TableHead>Expense Type</TableHead>
-            {showCodes && <TableHead>Accounting Code</TableHead>}
+            {showCodes && <TableHead>GL Code</TableHead>}
+            {showCodes && <TableHead>GL Name</TableHead>}
             <TableHead className="text-right">Report Count</TableHead>
             <TableHead className="text-right">Total Amount</TableHead>
           </TableRow>
@@ -673,7 +682,7 @@ function ExpenseTypeSummaryTab({
           {ledger.isLoading ? (
             Array.from({ length: 4 }).map((_, i) => (
               <TableRow key={i}>
-                {Array.from({ length: showCodes ? 4 : 3 }).map((__, j) => (
+                {Array.from({ length: showCodes ? 5 : 3 }).map((__, j) => (
                   <TableCell key={j}>
                     <Skeleton className="h-4 w-full" />
                   </TableCell>
@@ -683,7 +692,7 @@ function ExpenseTypeSummaryTab({
           ) : summary.length === 0 ? (
             <TableRow>
               <TableCell
-                colSpan={showCodes ? 4 : 3}
+                colSpan={showCodes ? 5 : 3}
                 className="h-24 text-center text-sm text-muted-foreground"
               >
                 No expenses match the current filters.
@@ -694,8 +703,9 @@ function ExpenseTypeSummaryTab({
               <TableRow key={s.name}>
                 <TableCell className="font-medium">{s.name}</TableCell>
                 {showCodes && (
-                  <TableCell className="tabular-nums">{s.code}</TableCell>
+                  <TableCell className="tabular-nums">{s.glCode}</TableCell>
                 )}
+                {showCodes && <TableCell>{s.glName}</TableCell>}
                 <TableCell className="text-right tabular-nums">{s.count}</TableCell>
                 <TableCell className="text-right tabular-nums">
                   {formatCurrency(s.total)}

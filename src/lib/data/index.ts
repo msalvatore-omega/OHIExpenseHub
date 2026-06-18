@@ -1213,7 +1213,8 @@ function buildLedger(): LedgerEntry[] {
         paidToName: userById.get(report.paidToId)?.name ?? "—",
         expenseTypeId: li.expenseTypeId,
         expenseTypeName: type?.displayName ?? "—",
-        accountingCode: type?.accountingCode ?? "",
+        glCode: type?.glCode ?? "",
+        glName: type?.glName ?? "",
         amount: li.amount,
         expenseDate: li.expenseDate,
         periodFrom: report.periodFrom,
@@ -1372,7 +1373,8 @@ export async function createExpenseType(
   return insertExpenseType({
     id: newId("etype"),
     displayName: input.displayName,
-    accountingCode: input.accountingCode,
+    glCode: input.glCode,
+    glName: input.glName,
     isMileage: input.isMileage,
   });
 }
