@@ -27,6 +27,8 @@ enum ReportStatus {
   DRAFT
   SUBMITTED
   IN_REVIEW
+  ACCOUNTING_REVIEW
+  EXECUTIVE_REVIEW
   APPROVED
   REJECTED
   PAID
@@ -59,9 +61,15 @@ model User {
   // Soft-delete flag: inactive users can no longer sign in or be selected, but
   // their historical reports and approval history remain intact.
   isActive    Boolean  @default(true)
+  // If 0, every report goes through the full approver chain. If > 0, reports
+  // below this amount skip Approvers #2/#3 and go straight to the Accounting +
+  // Executive groups.
+  fastTrackThreshold Decimal @default(0) @db.Decimal(18, 2)
   managerId   String?
   manager     User?    @relation("UserManager", fields: [managerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   reports     User[]   @relation("UserManager")
+
+  approvalGroupMemberships ApprovalGroupMember[]
 
   // Per-user approval chain (up to 3 steps). Independent of managerId: an
   // approver need not be the user's manager. Each is a distinct self-relation so
@@ -105,6 +113,31 @@ model Receipt {
 
   @@index([userId])
   @@index([uploadedById])
+}
+
+/// A mandatory approval group (Accounting Approval / Executive Approval). Reports
+/// route through both groups after the per-user approver chain. Seeded with two
+/// rows ("ACCOUNTING", "EXECUTIVE") that cannot be deleted or renamed in the UI.
+model ApprovalGroup {
+  id        String                @id @default(cuid())
+  key       String                @unique @db.NVarChar(50)
+  name      String                @db.NVarChar(100)
+  createdAt DateTime              @default(now())
+  members   ApprovalGroupMember[]
+}
+
+/// Membership of a user in an approval group (M2M). Any active member of the
+/// group can approve/reject/send-back a report at that group's step.
+model ApprovalGroupMember {
+  id        String        @id @default(cuid())
+  groupId   String
+  group     ApprovalGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User          @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  isActive  Boolean       @default(true)
+  createdAt DateTime      @default(now())
+
+  @@unique([groupId, userId])
 }
 
 /// Expense category with its general-ledger coding. SUBMITTER / APPROVER see

@@ -21,6 +21,8 @@ const STATUS_OPTIONS: { value: ReportStatus; label: string }[] = [
   { value: "DRAFT", label: "Draft" },
   { value: "SUBMITTED", label: "Submitted" },
   { value: "IN_REVIEW", label: "In Review" },
+  { value: "ACCOUNTING_REVIEW", label: "Accounting Review" },
+  { value: "EXECUTIVE_REVIEW", label: "Executive Review" },
   { value: "APPROVED", label: "Approved" },
   { value: "REJECTED", label: "Rejected" },
   { value: "PAID", label: "Paid" },

@@ -8,6 +8,8 @@ import {
   SETTING_KEYS,
 } from "@/lib/constants";
 import type {
+  ApprovalGroup,
+  ApprovalGroupMember,
   ApprovalHistory,
   Delegate,
   ExpenseLineItem,
@@ -33,6 +35,8 @@ export interface Database {
   changeLogs: ReportChangeLog[];
   outbox: MockEmail[];
   systemSettings: SystemSetting[];
+  approvalGroups: ApprovalGroup[];
+  approvalGroupMembers: ApprovalGroupMember[];
 }
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -45,6 +49,12 @@ const U = {
   submitter1: "user-priya-submitter",
   submitter2: "user-leah-submitter",
   accounting: "user-tom-accounting",
+} as const;
+
+// Stable ids for the two mandatory approval groups.
+const AG = {
+  accounting: "group-accounting",
+  executive: "group-executive",
 } as const;
 
 // Stable ids for the expense types referenced by the seed report line items.
@@ -75,6 +85,7 @@ function buildUsers(): User[] {
       approver1Id: null,
       approver2Id: null,
       approver3Id: null,
+      fastTrackThreshold: 0,
     },
     {
       id: U.approver1,
@@ -88,6 +99,7 @@ function buildUsers(): User[] {
       approver1Id: null,
       approver2Id: null,
       approver3Id: null,
+      fastTrackThreshold: 0,
     },
     {
       id: U.approver2,
@@ -101,6 +113,7 @@ function buildUsers(): User[] {
       approver1Id: null,
       approver2Id: null,
       approver3Id: null,
+      fastTrackThreshold: 0,
     },
     {
       id: U.submitter1,
@@ -115,6 +128,8 @@ function buildUsers(): User[] {
       approver1Id: U.approver1,
       approver2Id: U.approver2,
       approver3Id: null,
+      // Fast-track: small reports skip Approver #2 (Sandra) and go to the groups.
+      fastTrackThreshold: 1000,
     },
     {
       id: U.submitter2,
@@ -129,6 +144,7 @@ function buildUsers(): User[] {
       approver1Id: U.approver2,
       approver2Id: null,
       approver3Id: null,
+      fastTrackThreshold: 0,
     },
     {
       id: U.accounting,
@@ -142,7 +158,24 @@ function buildUsers(): User[] {
       approver1Id: null,
       approver2Id: null,
       approver3Id: null,
+      fastTrackThreshold: 0,
     },
+  ];
+}
+
+export function buildApprovalGroups(): ApprovalGroup[] {
+  return [
+    { id: AG.accounting, key: "ACCOUNTING", name: "Accounting Approval", createdAt: "2026-01-01T00:00:00.000Z" },
+    { id: AG.executive, key: "EXECUTIVE", name: "Executive Approval", createdAt: "2026-01-01T00:00:00.000Z" },
+  ];
+}
+
+export function buildApprovalGroupMembers(): ApprovalGroupMember[] {
+  return [
+    // Accounting Approval — Tom Becker (Accounting).
+    { id: "agm-acct-tom", groupId: AG.accounting, userId: U.accounting, isActive: true, createdAt: "2026-01-01T00:00:00.000Z" },
+    // Executive Approval — Dana Whitfield (Admin).
+    { id: "agm-exec-dana", groupId: AG.executive, userId: U.admin, isActive: true, createdAt: "2026-01-01T00:00:00.000Z" },
   ];
 }
 
@@ -409,7 +442,7 @@ function buildReportSpecs(): ReportSpec[] {
         paidToId: U.submitter2,
         periodFrom: "2026-05-15",
         periodTo: "2026-05-22",
-        status: "IN_REVIEW",
+        status: "ACCOUNTING_REVIEW",
         submittedAt: "2026-05-23T10:00:00.000Z",
         createdAt: "2026-05-22T17:00:00.000Z",
         updatedAt: "2026-05-23T15:00:00.000Z",
@@ -442,6 +475,7 @@ function buildReportSpecs(): ReportSpec[] {
           receiptId: "receipt-office-depot",
         }),
       ],
+      // Approver #1 (Sandra) already approved; now pending the Accounting group.
       history: [
         {
           id: "history-003a",
@@ -449,6 +483,22 @@ function buildReportSpecs(): ReportSpec[] {
           approverId: U.approver2,
           action: "PENDING",
           createdAt: "2026-05-23T10:00:05.000Z",
+        },
+        {
+          id: "history-003b",
+          reportId: "report-003",
+          approverId: U.approver2,
+          action: "APPROVED",
+          comment: "Approved — totals look right.",
+          createdAt: "2026-05-23T15:00:00.000Z",
+        },
+        {
+          id: "history-003c",
+          reportId: "report-003",
+          approverId: "",
+          approvalGroupId: AG.accounting,
+          action: "PENDING",
+          createdAt: "2026-05-23T15:00:05.000Z",
         },
       ],
     },
@@ -792,13 +842,14 @@ function buildChangeLogs(): ReportChangeLog[] {
     {
       id: "change-001",
       reportId: "report-003",
-      changedById: U.approver1,
-      changedAt: "2026-05-23T14:12:00.000Z",
+      changedById: U.approver2,
+      changedAt: "2026-05-23T15:00:00.000Z",
       changeType: "STATUS",
       field: "status",
       oldValue: "SUBMITTED",
-      newValue: "IN_REVIEW",
-      summary: "Status changed from Submitted to In Review",
+      newValue: "ACCOUNTING_REVIEW",
+      summary: "Approver 1 approved by Sandra Klein",
+      note: "Approved — totals look right.",
     },
     {
       id: "change-002",
@@ -865,8 +916,10 @@ export function createSeedData(): Database {
     changeLogs: buildChangeLogs(),
     outbox: buildOutbox(),
     systemSettings: buildSystemSettings(),
+    approvalGroups: buildApprovalGroups(),
+    approvalGroupMembers: buildApprovalGroupMembers(),
   };
 }
 
 /** Stable ID maps, exported for use in other mock modules (e.g. duplicates). */
-export const SEED_IDS = { users: U, expenseTypes: ET } as const;
+export const SEED_IDS = { users: U, expenseTypes: ET, approvalGroups: AG } as const;

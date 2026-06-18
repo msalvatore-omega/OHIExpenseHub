@@ -10,16 +10,20 @@ import { toast } from "sonner";
 
 import { cn } from "@/lib/utils";
 import { SETTING_KEYS } from "@/lib/constants";
+import { formatCurrency } from "@/lib/format";
 import {
+  addApprovalGroupMember,
   createDelegate,
   createExpenseType,
   createUser,
   deleteDelegate,
   deleteUser,
+  getApprovalGroups,
   getDelegates,
   getExpenseTypes,
   getUserDeletability,
   getUsers,
+  removeApprovalGroupMemberById,
   setUserActive,
   updateExpenseType,
   updateSystemSetting,
@@ -29,7 +33,12 @@ import {
   systemSettingsKey,
   useSystemSettings,
 } from "@/lib/use-system-settings";
-import type { ExpenseType, User, UserRole } from "@/lib/types";
+import type {
+  ApprovalGroupWithMembers,
+  ExpenseType,
+  User,
+  UserRole,
+} from "@/lib/types";
 import { AnnouncementBannerView } from "@/components/announcement-banner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -70,6 +79,7 @@ export function AdminTabs() {
         <TabsList>
           <TabsTrigger value="users">Users</TabsTrigger>
           <TabsTrigger value="delegates">Delegates</TabsTrigger>
+          <TabsTrigger value="groups">Approval Groups</TabsTrigger>
           <TabsTrigger value="types">Expense Types</TabsTrigger>
           <TabsTrigger value="system">System</TabsTrigger>
         </TabsList>
@@ -78,6 +88,9 @@ export function AdminTabs() {
         </TabsContent>
         <TabsContent value="delegates" className="pt-4">
           <DelegatesTab />
+        </TabsContent>
+        <TabsContent value="groups" className="pt-4">
+          <ApprovalGroupsTab />
         </TabsContent>
         <TabsContent value="types" className="pt-4">
           <ExpenseTypesTab />
@@ -132,6 +145,7 @@ function UsersTab() {
               <TableHead>Role</TableHead>
               <TableHead>Manager</TableHead>
               <TableHead>Approvers</TableHead>
+              <TableHead className="text-right">Fast-track</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
@@ -147,6 +161,11 @@ function UsersTab() {
                 </TableCell>
                 <TableCell className="text-sm text-muted-foreground">
                   {approverChainLabel(u)}
+                </TableCell>
+                <TableCell className="text-right tabular-nums text-muted-foreground">
+                  {u.fastTrackThreshold > 0
+                    ? formatCurrency(u.fastTrackThreshold)
+                    : "—"}
                 </TableCell>
                 <TableCell>
                   <StatusIndicator active={u.isActive} />
@@ -248,6 +267,35 @@ function StatusIndicator({ active }: { active: boolean }) {
   );
 }
 
+const FAST_TRACK_TOOLTIP =
+  "If 0, every report goes through the full approver chain. If > 0, reports below this amount skip Approvers #2 and #3 and go straight to Accounting and Executive review.";
+
+/** Fast-track threshold number input with explanatory help text. */
+function FastTrackField({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <label
+      className="flex flex-col gap-1 text-xs font-medium text-muted-foreground"
+      title={FAST_TRACK_TOOLTIP}
+    >
+      Fast-track threshold ($)
+      <Input
+        type="number"
+        min="0"
+        step="1"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      />
+      <span className="font-normal">{FAST_TRACK_TOOLTIP}</span>
+    </label>
+  );
+}
+
 function AddUserDialog({
   open,
   users,
@@ -264,6 +312,7 @@ function AddUserDialog({
   const [department, setDepartment] = React.useState("");
   const [role, setRole] = React.useState<UserRole>("SUBMITTER");
   const [managerId, setManagerId] = React.useState("");
+  const [fastTrack, setFastTrack] = React.useState("0");
 
   React.useEffect(() => {
     if (open) {
@@ -274,12 +323,20 @@ function AddUserDialog({
       setDepartment("");
       setRole("SUBMITTER");
       setManagerId("");
+      setFastTrack("0");
     }
   }, [open]);
 
   const mutation = useMutation({
     mutationFn: () =>
-      createUser({ email, name, department, role, managerId: managerId || null }),
+      createUser({
+        email,
+        name,
+        department,
+        role,
+        managerId: managerId || null,
+        fastTrackThreshold: Number(fastTrack) || 0,
+      }),
     onSuccess: () => {
       toast.success("User created");
       onSaved();
@@ -343,6 +400,7 @@ function AddUserDialog({
               ))}
             </select>
           </label>
+          <FastTrackField value={fastTrack} onChange={setFastTrack} />
           <p className="text-xs text-muted-foreground">
             The account links to Azure AD on the user&apos;s first sign-in
             (matched by email).
@@ -578,6 +636,7 @@ function EditUserDialog({
   const [approver1Id, setApprover1Id] = React.useState<string>("");
   const [approver2Id, setApprover2Id] = React.useState<string>("");
   const [approver3Id, setApprover3Id] = React.useState<string>("");
+  const [fastTrack, setFastTrack] = React.useState<string>("0");
 
   React.useEffect(() => {
     if (user) {
@@ -587,6 +646,7 @@ function EditUserDialog({
       setApprover1Id(user.approver1Id ?? "");
       setApprover2Id(user.approver2Id ?? "");
       setApprover3Id(user.approver3Id ?? "");
+      setFastTrack(String(user.fastTrackThreshold ?? 0));
     }
   }, [user]);
 
@@ -601,6 +661,7 @@ function EditUserDialog({
         approver1Id: approver1Id || null,
         approver2Id: approver2Id || null,
         approver3Id: approver3Id || null,
+        fastTrackThreshold: Number(fastTrack) || 0,
       }),
     onSuccess: () => {
       toast.success("User updated");
@@ -673,6 +734,7 @@ function EditUserDialog({
               none are set, routing falls back to the user&apos;s manager.
             </p>
           </div>
+          <FastTrackField value={fastTrack} onChange={setFastTrack} />
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>
@@ -807,6 +869,207 @@ function DelegatesTab() {
         </Table>
       </div>
     </div>
+  );
+}
+
+// ---------------- Approval Groups ----------------
+
+function ApprovalGroupsTab() {
+  const qc = useQueryClient();
+  const groups = useQuery({
+    queryKey: ["approval-groups"],
+    queryFn: getApprovalGroups,
+  });
+  const users = useQuery({ queryKey: ["users"], queryFn: getUsers });
+  const [removing, setRemoving] = React.useState<{
+    memberId: string;
+    name: string;
+    groupName: string;
+  } | null>(null);
+
+  const invalidate = () =>
+    qc.invalidateQueries({ queryKey: ["approval-groups"] });
+
+  const removeMutation = useMutation({
+    mutationFn: (memberId: string) => removeApprovalGroupMemberById(memberId),
+    onSuccess: () => {
+      invalidate();
+      toast.success("Member removed");
+      setRemoving(null);
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
+  });
+
+  if (groups.isLoading || users.isLoading) {
+    return (
+      <div className="flex flex-col gap-4">
+        <Skeleton className="h-44 w-full rounded-xl" />
+        <Skeleton className="h-44 w-full rounded-xl" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <p className="text-sm text-muted-foreground">
+        The Accounting and Executive approval groups are mandatory — they
+        can&apos;t be renamed or deleted. Edit their membership below. Every
+        report routes through both groups after the per-user approver chain.
+      </p>
+      {(groups.data ?? []).map((g) => (
+        <GroupCard
+          key={g.group.id}
+          data={g}
+          allUsers={users.data ?? []}
+          onChanged={invalidate}
+          onAskRemove={setRemoving}
+        />
+      ))}
+      <Dialog
+        open={!!removing}
+        onOpenChange={(o) => !o && !removeMutation.isPending && setRemoving(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Remove member?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Remove{" "}
+            <span className="font-medium text-foreground">{removing?.name}</span>{" "}
+            from{" "}
+            <span className="font-medium text-foreground">
+              {removing?.groupName}
+            </span>
+            ? They will no longer be able to approve reports at that step.
+          </p>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setRemoving(null)}
+              disabled={removeMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => removing && removeMutation.mutate(removing.memberId)}
+              disabled={removeMutation.isPending}
+            >
+              Remove
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function GroupCard({
+  data,
+  allUsers,
+  onChanged,
+  onAskRemove,
+}: {
+  data: ApprovalGroupWithMembers;
+  allUsers: User[];
+  onChanged: () => void;
+  onAskRemove: (m: { memberId: string; name: string; groupName: string }) => void;
+}) {
+  const [pickUserId, setPickUserId] = React.useState("");
+
+  const memberUserIds = new Set(data.members.map((m) => m.userId));
+  // Exclude inactive users and users already in this group.
+  const addable = allUsers.filter(
+    (u) => u.isActive && !memberUserIds.has(u.id)
+  );
+  const activeCount = data.members.filter((m) => m.isActive).length;
+
+  const addMutation = useMutation({
+    mutationFn: () => addApprovalGroupMember(data.group.id, pickUserId),
+    onSuccess: () => {
+      setPickUserId("");
+      onChanged();
+      toast.success("Member added");
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
+  });
+
+  return (
+    <section className="flex flex-col gap-3 rounded-xl border border-border p-4">
+      <div>
+        <h3 className="text-sm font-semibold">{data.group.name}</h3>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          Mandatory group · key {data.group.key}
+        </p>
+      </div>
+
+      {activeCount === 0 && (
+        <div className="rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">
+          This group has no active members — reports will stall at this step.
+          Add at least one member.
+        </div>
+      )}
+
+      {data.members.length > 0 && (
+        <ul className="flex flex-col divide-y divide-border overflow-hidden rounded-lg border border-border">
+          {data.members.map((m) => (
+            <li
+              key={m.id}
+              className="flex items-center justify-between gap-2 px-3 py-2"
+            >
+              <span className="flex items-center gap-2 text-sm">
+                {m.name}
+                {!m.isActive && (
+                  <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                    Inactive
+                  </span>
+                )}
+              </span>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="text-muted-foreground hover:text-destructive"
+                aria-label={`Remove ${m.name} from ${data.group.name}`}
+                onClick={() =>
+                  onAskRemove({
+                    memberId: m.id,
+                    name: m.name,
+                    groupName: data.group.name,
+                  })
+                }
+              >
+                <Trash2 className="size-4" />
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <div className="flex flex-wrap items-end gap-2">
+        <label className="flex flex-1 flex-col gap-1 text-xs font-medium text-muted-foreground">
+          Add member
+          <select
+            className={SELECT_CLASS}
+            value={pickUserId}
+            onChange={(e) => setPickUserId(e.target.value)}
+          >
+            <option value="">Select a user…</option>
+            {addable.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <Button
+          onClick={() => addMutation.mutate()}
+          disabled={!pickUserId || addMutation.isPending}
+        >
+          <Plus className="size-4" />
+          Add Member
+        </Button>
+      </div>
+    </section>
   );
 }
 

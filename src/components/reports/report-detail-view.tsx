@@ -10,7 +10,13 @@ import { CheckCircle2, Clock, XCircle } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { formatCurrency, formatDate } from "@/lib/format";
-import { getExpenseTypes, getReceipts, getReport, getUsers } from "@/lib/data";
+import {
+  getApprovalGroups,
+  getExpenseTypes,
+  getReceipts,
+  getReport,
+  getUsers,
+} from "@/lib/data";
 import type { ApprovalAction, Receipt } from "@/lib/types";
 import { StatusPill } from "@/components/status-pill";
 import { ChangeHistoryButton } from "@/components/reports/report-change-history";
@@ -80,10 +86,17 @@ export function ReportDetailView({
     queryKey: ["all-receipts"],
     queryFn: () => getReceipts(),
   });
+  const groupsQuery = useQuery({
+    queryKey: ["approval-groups"],
+    queryFn: getApprovalGroups,
+  });
 
   const [lightbox, setLightbox] = React.useState<Receipt | null>(null);
 
   const nameById = new Map((usersQuery.data ?? []).map((u) => [u.id, u.name]));
+  const groupNameById = new Map(
+    (groupsQuery.data ?? []).map((g) => [g.group.id, g.group.name])
+  );
   const typeName = new Map(
     (typesQuery.data ?? []).map((t) => [t.id, t.displayName])
   );
@@ -219,7 +232,13 @@ export function ReportDetailView({
                       <span className="font-medium">{meta.label}</span>
                       {" · "}
                       <span className="text-muted-foreground">
-                        {nameById.get(h.approverId) ?? "System"}
+                        {h.approvalGroupId
+                          ? `${groupNameById.get(h.approvalGroupId) ?? "Group"}${
+                              h.approverId
+                                ? ` (${nameById.get(h.approverId) ?? "—"})`
+                                : ""
+                            }`
+                          : nameById.get(h.approverId) ?? "System"}
                       </span>
                     </p>
                     <p className="text-xs text-muted-foreground">

@@ -11,8 +11,13 @@ import {
   findReceipt,
   findReport,
   getSettingValue,
+  insertApprovalGroupMember,
   insertApprovalHistory,
+  patchApprovalHistory,
   insertChangeLog,
+  listApprovalGroupMembers,
+  listApprovalGroups,
+  removeApprovalGroupMember,
   insertEmail,
   insertReceipt,
   insertReport,
@@ -53,6 +58,8 @@ import type {
   AnalyticsFilter,
   AppSettings,
   ApprovalActionResult,
+  ApprovalGroupKey,
+  ApprovalGroupWithMembers,
   ApprovalHistory,
   CreateDraftInput,
   CreateReceiptInput,
@@ -131,65 +138,152 @@ function payeeId(report: ExpenseReport): string {
 }
 
 /**
- * The payee's configured approver chain as an ordered list of user ids, with
- * unconfigured (null) steps skipped. Empty when the payee has no approvers.
+ * A single step in a report's approval chain: either one user (an approver or
+ * the fallback) or a whole approval group (Accounting / Executive).
  */
-function approverChain(report: ExpenseReport): string[] {
+type ChainStep =
+  | { kind: "user"; userId: string }
+  | { kind: "group"; groupId: string; groupKey: ApprovalGroupKey; name: string };
+
+/**
+ * Whether a report fast-tracks: the payee has a threshold > 0 and the report
+ * total is below it. Fast-tracked reports skip Approvers #2/#3.
+ */
+function isFastTracked(report: ExpenseReport): boolean {
   const payee = userById(payeeId(report));
-  if (!payee) return [];
-  return [payee.approver1Id, payee.approver2Id, payee.approver3Id].filter(
-    (id): id is string => Boolean(id)
-  );
+  const threshold = payee?.fastTrackThreshold ?? 0;
+  return threshold > 0 && report.totalAmount < threshold;
+}
+
+function groupStep(key: ApprovalGroupKey): ChainStep | undefined {
+  const g = listApprovalGroups().find((x) => x.key === key);
+  return g ? { kind: "group", groupId: g.id, groupKey: key, name: g.name } : undefined;
+}
+
+/** Active member ids of a group (membership active AND the user active). */
+function activeGroupMemberIds(groupId: string): string[] {
+  return listApprovalGroupMembers()
+    .filter((m) => m.groupId === groupId && m.isActive)
+    .map((m) => m.userId)
+    .filter((uid) => userById(uid)?.isActive);
 }
 
 /**
- * The approver a report should first route to on submit: the head of the
- * payee's chain, or the fallback (payee's manager, else the first ADMIN).
+ * Build a report's approval chain at the current data state. The user step(s)
+ * come from the payee's approver chain (fast-track keeps only Approver #1), with
+ * a fallback to manager → first ADMIN, followed ALWAYS by the Accounting then
+ * Executive groups.
  */
-function firstApproverFor(report: ExpenseReport): User | undefined {
-  const chain = approverChain(report);
-  if (chain.length) return userById(chain[0]);
+function buildChain(report: ExpenseReport): ChainStep[] {
   const payee = userById(payeeId(report));
-  return (
-    userById(payee?.managerId ?? undefined) ??
-    listUsers().find((u) => u.role === "ADMIN")
+  let userIds: string[];
+  if (isFastTracked(report)) {
+    userIds = payee?.approver1Id ? [payee.approver1Id] : [];
+  } else {
+    userIds = [payee?.approver1Id, payee?.approver2Id, payee?.approver3Id].filter(
+      (id): id is string => Boolean(id)
+    );
+  }
+  if (userIds.length === 0) {
+    const fb =
+      userById(payee?.managerId ?? undefined) ??
+      listUsers().find((u) => u.role === "ADMIN");
+    if (fb) userIds = [fb.id];
+  }
+  const steps: ChainStep[] = userIds.map((id) => ({ kind: "user", userId: id }));
+  const acct = groupStep("ACCOUNTING");
+  const exec = groupStep("EXECUTIVE");
+  if (acct) steps.push(acct);
+  if (exec) steps.push(exec);
+  return steps;
+}
+
+/** Number of completed (approved) steps — also the index of the current step. */
+function approvalCount(report: ExpenseReport): number {
+  return listApprovalHistory(report.id).filter((h) => h.action === "APPROVED")
+    .length;
+}
+
+/** The step a report is currently waiting on (only meaningful while open). */
+function currentStep(report: ExpenseReport): ChainStep | undefined {
+  const chain = buildChain(report);
+  return chain[approvalCount(report)];
+}
+
+/** Display label for a step: "Approver N" or the group's name. */
+function stepLabelOf(step: ChainStep, chain: ChainStep[]): string {
+  if (step.kind === "group") return step.name;
+  // Ordinal among user steps, matched by value (chain may be rebuilt).
+  const userSteps = chain.filter(
+    (s): s is Extract<ChainStep, { kind: "user" }> => s.kind === "user"
   );
+  const n = userSteps.findIndex((s) => s.userId === step.userId);
+  return `Approver ${(n < 0 ? 0 : n) + 1}`;
 }
 
-/** The approver currently/most-recently associated with a report. */
-function currentApproverId(report: ExpenseReport): string | undefined {
-  const history = listApprovalHistory(report.id);
-  const decision = [...history]
+/** Users who can act on a step right now (the user, or a group's active members). */
+function stepTargetIds(step: ChainStep): string[] {
+  return step.kind === "user" ? [step.userId] : activeGroupMemberIds(step.groupId);
+}
+
+/** Whether the report is currently awaiting action from this user. */
+function isPendingFor(report: ExpenseReport, userId: string): boolean {
+  if (!OPEN_STATUSES.includes(report.status)) return false;
+  const step = currentStep(report);
+  return step ? stepTargetIds(step).includes(userId) : false;
+}
+
+/** The most recent user who acted on the report (for finished-report display). */
+function lastActorId(report: ExpenseReport): string | undefined {
+  return [...listApprovalHistory(report.id)]
     .reverse()
-    .find((h) => h.action === "APPROVED" || h.action === "REJECTED");
-  if (decision) return decision.approverId;
-  const pending = [...history].reverse().find((h) => h.action === "PENDING");
-  if (pending) return pending.approverId;
-  return firstApproverFor(report)?.id;
+    .find((h) => (h.action === "APPROVED" || h.action === "REJECTED") && h.approverId)
+    ?.approverId;
 }
 
-/** The approver a report is currently waiting on (only meaningful while open). */
-function pendingApproverId(report: ExpenseReport): string | undefined {
-  const pending = [...listApprovalHistory(report.id)]
-    .reverse()
-    .find((h) => h.action === "PENDING");
-  return pending?.approverId;
+/** Who/what the report is currently with, as a display name. */
+function pendingTargetName(report: ExpenseReport): string {
+  const step = currentStep(report);
+  if (!step) return userName(lastActorId(report));
+  return step.kind === "group" ? step.name : userName(step.userId);
 }
 
-/** Human-readable workflow step, e.g. "Approver 1 of 2". */
-function stepLabel(report: ExpenseReport): string {
-  const history = listApprovalHistory(report.id);
-  // Total steps governed by the payee's chain, but never fewer than the
-  // approvers actually recorded (covers fallback + legacy single-step routing).
-  const total = Math.max(
-    1,
-    approverChain(report).length,
-    new Set(history.map((h) => h.approverId)).size
-  );
-  const approvals = history.filter((h) => h.action === "APPROVED").length;
-  const open = report.status === "SUBMITTED" || report.status === "IN_REVIEW";
-  const current = open ? Math.min(approvals + 1, total) : total;
-  return `Approver ${current} of ${total}`;
+/** Current step label for routing/dashboard, e.g. "Approver 1" / "Accounting Approval". */
+function routingStepLabel(report: ExpenseReport): string {
+  const chain = buildChain(report);
+  const step = chain[approvalCount(report)];
+  return step ? stepLabelOf(step, chain) : "—";
+}
+
+/** Insert the PENDING history entry for a step (display + timeline). */
+function insertPendingStep(
+  reportId: string,
+  step: ChainStep,
+  timestamp: string
+): void {
+  insertApprovalHistory({
+    id: newId("history"),
+    reportId,
+    approverId: step.kind === "user" ? step.userId : "",
+    approvalGroupId: step.kind === "group" ? step.groupId : undefined,
+    action: "PENDING",
+    createdAt: timestamp,
+  });
+}
+
+/** Email everyone who can act on a step that just became pending. */
+function notifyStep(report: ExpenseReport, step: ChainStep): MockEmail[] {
+  const submitter = userById(report.submitterId);
+  const who =
+    step.kind === "group" ? `${step.name} review` : "your approval";
+  const subject = `Action Required: ${report.reportName} needs ${who}`;
+  const body = `${submitter?.name ?? "A submitter"} submitted an expense report (${report.reportName}) totaling ${currency(report.totalAmount)} for ${who}.`;
+  const out: MockEmail[] = [];
+  for (const uid of stepTargetIds(step)) {
+    const u = userById(uid);
+    if (u) out.push(sendMockEmail(u.email, subject, body));
+  }
+  return out;
 }
 
 function involvesUser(report: ExpenseReport, userId: string): boolean {
@@ -204,8 +298,9 @@ function toRoutingRow(report: ExpenseReport): ReportRoutingRow {
   return {
     report,
     submitterName: userName(report.submitterId),
-    approverName: userName(currentApproverId(report)),
-    step: stepLabel(report),
+    approverName: pendingTargetName(report),
+    step: routingStepLabel(report),
+    fastTracked: isFastTracked(report),
   };
 }
 
@@ -213,6 +308,8 @@ const STATUS_LABEL: Record<ReportStatus, string> = {
   DRAFT: "Draft",
   SUBMITTED: "Submitted",
   IN_REVIEW: "In Review",
+  ACCOUNTING_REVIEW: "Accounting Review",
+  EXECUTIVE_REVIEW: "Executive Review",
   APPROVED: "Approved",
   REJECTED: "Rejected",
   PAID: "Paid",
@@ -254,10 +351,17 @@ function recordChange(
   });
 }
 
-const OPEN_STATUSES: ReportStatus[] = ["SUBMITTED", "IN_REVIEW"];
+const OPEN_STATUSES: ReportStatus[] = [
+  "SUBMITTED",
+  "IN_REVIEW",
+  "ACCOUNTING_REVIEW",
+  "EXECUTIVE_REVIEW",
+];
 const ACTIVE_STATUSES: ReportStatus[] = [
   "SUBMITTED",
   "IN_REVIEW",
+  "ACCOUNTING_REVIEW",
+  "EXECUTIVE_REVIEW",
   "APPROVED",
   "REJECTED",
 ];
@@ -336,8 +440,8 @@ export async function getKpis(): Promise<Kpis> {
   return {
     totalReports: reports.length,
     draftCount: reports.filter((r) => r.status === "DRAFT").length,
-    pendingApprovalCount: reports.filter(
-      (r) => r.status === "SUBMITTED" || r.status === "IN_REVIEW"
+    pendingApprovalCount: reports.filter((r) =>
+      OPEN_STATUSES.includes(r.status)
     ).length,
     approvedCount: reports.filter((r) => r.status === "APPROVED").length,
     rejectedCount: reports.filter((r) => r.status === "REJECTED").length,
@@ -649,33 +753,20 @@ export async function submitReport(id: string): Promise<ApprovalActionResult> {
     submittedAt: timestamp,
   })!;
 
-  // Route to the head of the payee's approver chain; fall back to the payee's
-  // manager, then the first ADMIN.
-  const submitter = userById(report.submitterId);
-  const approver = firstApproverFor(report);
-
+  // Build the chain (fast-track or full) and route to its first step.
   const notifications: MockEmail[] = [];
-  if (approver) {
-    insertApprovalHistory({
-      id: newId("history"),
-      reportId: id,
-      approverId: approver.id,
-      action: "PENDING",
-      createdAt: timestamp,
-    });
-    notifications.push(
-      sendMockEmail(
-        approver.email,
-        `Action Required: ${report.reportName} needs your approval`,
-        `${submitter?.name ?? "A submitter"} submitted an expense report (${report.reportName}) totaling ${currency(updated.totalAmount)} for your approval.`
-      )
-    );
+  const chain = buildChain(updated);
+  const first = chain[0];
+  if (first) {
+    insertPendingStep(id, first, timestamp);
+    notifications.push(...notifyStep(updated, first));
   }
   return { report: updated, notifications };
 }
 
 export async function approveReport(
   id: string,
+  actorId: string,
   comment?: string
 ): Promise<ApprovalActionResult> {
   await delay();
@@ -683,78 +774,64 @@ export async function approveReport(
   if (!report) throw new Error(`Report ${id} not found`);
 
   const timestamp = nowIso();
-  const submitter = userById(report.submitterId);
-  const approverId =
-    pendingApproverId(report) ?? currentApproverId(report) ?? "system";
+  const chain = buildChain(report);
+  const idx = approvalCount(report);
+  const step = chain[idx];
+  const actorName = userName(actorId);
+  const prevStatus = report.status;
+  const notifications: MockEmail[] = [];
 
+  // Record this user's approval at the current step (group id if a group step).
   insertApprovalHistory({
     id: newId("history"),
     reportId: id,
-    approverId,
+    approverId: actorId,
+    approvalGroupId: step?.kind === "group" ? step.groupId : undefined,
     action: "APPROVED",
     comment,
     createdAt: timestamp,
   });
 
-  // Advance to the next configured approver in the payee's chain (null steps
-  // already skipped). When the current approver isn't in the chain (fallback
-  // routing), there is no next step and the report finalizes.
-  const chain = approverChain(report);
-  const idx = chain.indexOf(approverId);
-  const nextApprover =
-    idx >= 0 && idx + 1 < chain.length
-      ? userById(chain[idx + 1])
-      : undefined;
+  const nextStep = chain[idx + 1];
+  const stepLabel = step ? stepLabelOf(step, chain) : "Approval";
 
-  const prevStatus = report.status;
-  const notifications: MockEmail[] = [];
-
-  if (nextApprover) {
-    // More approvers remain — keep the report open and route onward.
-    const updated = patchReport(id, { status: "IN_REVIEW" })!;
-    insertApprovalHistory({
-      id: newId("history"),
-      reportId: id,
-      approverId: nextApprover.id,
-      action: "PENDING",
-      createdAt: timestamp,
+  if (nextStep) {
+    // Advance to the next step; status reflects what's now waiting on it.
+    const nextStatus: ReportStatus =
+      nextStep.kind === "group"
+        ? nextStep.groupKey === "ACCOUNTING"
+          ? "ACCOUNTING_REVIEW"
+          : "EXECUTIVE_REVIEW"
+        : "IN_REVIEW";
+    const updated = patchReport(id, { status: nextStatus })!;
+    recordChange(id, actorId, "STATUS", `${stepLabel} approved by ${actorName}`, {
+      field: "status",
+      oldValue: prevStatus,
+      newValue: nextStatus,
+      note: comment,
     });
-    if (prevStatus !== "IN_REVIEW") {
-      recordChange(
-        id,
-        approverId,
-        "STATUS",
-        `Status changed from ${STATUS_LABEL[prevStatus]} to ${STATUS_LABEL.IN_REVIEW}`,
-        { field: "status", oldValue: prevStatus, newValue: "IN_REVIEW" }
-      );
-    }
-    notifications.push(
-      sendMockEmail(
-        nextApprover.email,
-        `Action Required: ${report.reportName} needs your approval`,
-        `${submitter?.name ?? "A submitter"} submitted an expense report (${report.reportName}) totaling ${currency(updated.totalAmount)} for your approval.`
-      )
-    );
+    insertPendingStep(id, nextStep, timestamp);
+    notifications.push(...notifyStep(updated, nextStep));
     return { report: updated, notifications };
   }
 
-  // Last approver in the chain — finalize and hand off to accounting.
+  // Last step (Executive Approval) — finalize and hand off to accounting.
   const updated = patchReport(id, { status: "APPROVED" })!;
   recordChange(
     id,
-    approverId,
+    actorId,
     "STATUS",
-    `Status changed from ${STATUS_LABEL[prevStatus]} to ${STATUS_LABEL.APPROVED}`,
-    { field: "status", oldValue: prevStatus, newValue: "APPROVED" }
+    `${stepLabel} approved by ${actorName} — report approved`,
+    { field: "status", oldValue: prevStatus, newValue: "APPROVED", note: comment }
   );
 
-  const recipient = userById(report.paidToId) ?? submitter;
-  if (recipient) {
+  const submitter = userById(report.submitterId);
+  if (submitter) {
     notifications.push(
       sendMockEmail(
-        recipient.email,
+        submitter.email,
         `Approved: ${report.reportName}`,
-        `Your expense report (${report.reportName}) totaling ${currency(updated.totalAmount)} was approved${comment ? `. Note: ${comment}` : "."}`
+        `Your expense report (${report.reportName}) totaling ${currency(updated.totalAmount)} was fully approved${comment ? `. Note: ${comment}` : "."}`
       )
     );
   }
@@ -770,6 +847,7 @@ export async function approveReport(
 
 export async function rejectReport(
   id: string,
+  actorId: string,
   comment?: string
 ): Promise<ApprovalActionResult> {
   await delay();
@@ -777,36 +855,37 @@ export async function rejectReport(
   if (!report) throw new Error(`Report ${id} not found`);
 
   const timestamp = nowIso();
-  const submitter = userById(report.submitterId);
-  const approverId =
-    pendingApproverId(report) ?? currentApproverId(report) ?? "system";
+  const chain = buildChain(report);
+  const step = chain[approvalCount(report)];
+  const actorName = userName(actorId);
+  const stepLabel = step ? stepLabelOf(step, chain) : "Approval";
 
   insertApprovalHistory({
     id: newId("history"),
     reportId: id,
-    approverId,
+    approverId: actorId,
+    approvalGroupId: step?.kind === "group" ? step.groupId : undefined,
     action: "REJECTED",
     comment,
     createdAt: timestamp,
   });
   const prevStatus = report.status;
   const updated = patchReport(id, { status: "REJECTED" })!;
-  recordChange(
-    id,
-    approverId,
-    "STATUS",
-    `Status changed from ${STATUS_LABEL[prevStatus]} to ${STATUS_LABEL.REJECTED}`,
-    { field: "status", oldValue: prevStatus, newValue: "REJECTED" }
-  );
+  recordChange(id, actorId, "STATUS", `${stepLabel} rejected by ${actorName}`, {
+    field: "status",
+    oldValue: prevStatus,
+    newValue: "REJECTED",
+    note: comment,
+  });
 
   const notifications: MockEmail[] = [];
-  const recipient = userById(report.paidToId) ?? submitter;
-  if (recipient) {
+  const submitter = userById(report.submitterId);
+  if (submitter) {
     notifications.push(
       sendMockEmail(
-        recipient.email,
+        submitter.email,
         `Changes Requested: ${report.reportName}`,
-        `Your expense report (${report.reportName}) was rejected by ${userName(approverId)}.${comment ? ` Reason: ${comment}` : ""}`
+        `Your expense report (${report.reportName}) was rejected by ${actorName} at ${stepLabel}.${comment ? ` Reason: ${comment}` : ""}`
       )
     );
   }
@@ -821,6 +900,7 @@ export async function rejectReport(
  */
 export async function sendBackReport(
   id: string,
+  actorId: string,
   reason: string
 ): Promise<ApprovalActionResult> {
   await delay();
@@ -832,22 +912,24 @@ export async function sendBackReport(
     throw new Error("A reason is required to send a report back.");
   }
 
-  // Resolve the acting approver before clearing the workflow state.
-  const approverId =
-    pendingApproverId(report) ?? currentApproverId(report) ?? "system";
+  const chain = buildChain(report);
+  const step = chain[approvalCount(report)];
+  const stepLabel = step ? stepLabelOf(step, chain) : "approval";
+  const actorName = userName(actorId);
 
   // Reset the workflow: drop every approval-history entry (pending + decisions)
-  // so resubmission re-routes from the head of the payee's chain.
+  // so resubmission re-routes from the head of the chain (Approver #1).
   clearApprovalHistory(id);
 
   const prevStatus = report.status;
   const updated = patchReport(id, { status: "DRAFT" })!;
-  recordChange(id, approverId, "STATUS", "Sent back to employee", {
-    field: "status",
-    oldValue: prevStatus,
-    newValue: "DRAFT",
-    note: trimmedReason,
-  });
+  recordChange(
+    id,
+    actorId,
+    "STATUS",
+    `Sent back to employee from ${stepLabel} by ${actorName}`,
+    { field: "status", oldValue: prevStatus, newValue: "DRAFT", note: trimmedReason }
+  );
 
   const notifications: MockEmail[] = [];
   const submitter = userById(report.submitterId);
@@ -856,7 +938,7 @@ export async function sendBackReport(
       sendMockEmail(
         submitter.email,
         `Returned for Revision: ${report.reportName}`,
-        `Your expense report (${report.reportName}) was returned by ${userName(approverId)} and is back in your drafts to edit and resubmit. Reason: ${trimmedReason}\n\nEdit it here: /reports/${id}/edit`
+        `Your expense report (${report.reportName}) was returned by ${actorName} and is back in your drafts to edit and resubmit. Reason: ${trimmedReason}\n\nEdit it here: /reports/${id}/edit`
       )
     );
   }
@@ -938,6 +1020,37 @@ export async function changeReportStatus(
   return { report: updated, notifications };
 }
 
+/**
+ * Auto-save a draft note to the PENDING history entry for the current step.
+ * Returns `{ resolved: true }` when the step no longer awaits this actor
+ * (e.g. a concurrent group member just approved) — the caller should show a
+ * "step resolved" toast and refresh the report.
+ */
+export async function savePendingNote(
+  reportId: string,
+  actorId: string,
+  comment: string
+): Promise<{ resolved: boolean }> {
+  // No simulated delay — auto-save should feel instant.
+  const report = findReport(reportId);
+  if (!report || !isPendingFor(report, actorId)) return { resolved: true };
+
+  // Walk backwards through sorted history: the first entry we hit should be
+  // the current step's PENDING row (most recently inserted).
+  const history = [...listApprovalHistory(reportId)].sort(
+    (a, b) => a.createdAt.localeCompare(b.createdAt)
+  );
+  for (let i = history.length - 1; i >= 0; i--) {
+    if (history[i].action === "PENDING") {
+      patchApprovalHistory(history[i].id, { comment: comment || undefined });
+      return { resolved: false };
+    }
+    // Most-recent entry is APPROVED/REJECTED — step resolved concurrently.
+    break;
+  }
+  return { resolved: false };
+}
+
 // ---- Dashboard / personal views ----
 
 /** Reports the user owns (as submitter, on-behalf subject, or payee). */
@@ -954,10 +1067,7 @@ export async function getApprovalQueue(
 ): Promise<ReportRoutingRow[]> {
   await delay();
   return listReports()
-    .filter(
-      (r) =>
-        OPEN_STATUSES.includes(r.status) && pendingApproverId(r) === approverId
-    )
+    .filter((r) => isPendingFor(r, approverId))
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
     .map(toRoutingRow);
 }
@@ -971,7 +1081,9 @@ export async function getRoutingForUser(
     .filter(
       (r) =>
         ACTIVE_STATUSES.includes(r.status) &&
-        (involvesUser(r, userId) || currentApproverId(r) === userId)
+        (involvesUser(r, userId) ||
+          isPendingFor(r, userId) ||
+          listApprovalHistory(r.id).some((h) => h.approverId === userId))
     )
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
     .map(toRoutingRow);
@@ -1313,7 +1425,56 @@ export async function createUser(input: CreateUserInput): Promise<User> {
     approver1Id: null,
     approver2Id: null,
     approver3Id: null,
+    fastTrackThreshold: input.fastTrackThreshold ?? 0,
   });
+}
+
+// ---- Approval groups (admin) ----
+
+/** The two mandatory approval groups, each with its members resolved. */
+export async function getApprovalGroups(): Promise<ApprovalGroupWithMembers[]> {
+  await delay();
+  return listApprovalGroups().map((group) => ({
+    group,
+    members: listApprovalGroupMembers()
+      .filter((m) => m.groupId === group.id)
+      .map((m) => {
+        const u = userById(m.userId);
+        return {
+          id: m.id,
+          userId: m.userId,
+          name: u?.name ?? "—",
+          isActive: m.isActive && Boolean(u?.isActive),
+        };
+      }),
+  }));
+}
+
+/** Add a user to an approval group (no-op if already a member). */
+export async function addApprovalGroupMember(
+  groupId: string,
+  userId: string
+): Promise<void> {
+  await delay();
+  const exists = listApprovalGroupMembers().some(
+    (m) => m.groupId === groupId && m.userId === userId
+  );
+  if (exists) return;
+  insertApprovalGroupMember({
+    id: newId("agm"),
+    groupId,
+    userId,
+    isActive: true,
+    createdAt: nowIso(),
+  });
+}
+
+/** Remove a membership row from a group. */
+export async function removeApprovalGroupMemberById(id: string): Promise<void> {
+  await delay();
+  if (!removeApprovalGroupMember(id)) {
+    throw new Error(`Group member ${id} not found`);
+  }
 }
 
 /** Whether a user can be hard-deleted (no reports/approvals/delegates/changes). */

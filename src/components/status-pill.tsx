@@ -21,6 +21,14 @@ const STATUS_CONFIG: Record<
   DRAFT: { label: "Draft", style: { kind: "tint", color: "var(--muted-foreground)" } },
   SUBMITTED: { label: "Submitted", style: { kind: "tint", color: "var(--primary)" } },
   IN_REVIEW: { label: "In Review", style: { kind: "tint", color: "var(--warning)" } },
+  ACCOUNTING_REVIEW: {
+    label: "Accounting Review",
+    style: { kind: "tint", color: "oklch(0.65 0.15 50)" },
+  },
+  EXECUTIVE_REVIEW: {
+    label: "Executive Review",
+    style: { kind: "tint", color: "oklch(0.55 0.20 295)" },
+  },
   APPROVED: { label: "Approved", style: { kind: "tint", color: "var(--success)" } },
   REJECTED: { label: "Rejected", style: { kind: "tint", color: "var(--danger)" } },
   PAID: {

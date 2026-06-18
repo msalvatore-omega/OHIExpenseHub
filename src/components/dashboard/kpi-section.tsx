@@ -70,7 +70,11 @@ export function KpiSection({ userId }: { userId: string }) {
   const reports = myReports.data ?? [];
   const drafts = reports.filter((r) => r.status === "DRAFT");
   const inApproval = reports.filter(
-    (r) => r.status === "SUBMITTED" || r.status === "IN_REVIEW"
+    (r) =>
+      r.status === "SUBMITTED" ||
+      r.status === "IN_REVIEW" ||
+      r.status === "ACCOUNTING_REVIEW" ||
+      r.status === "EXECUTIVE_REVIEW"
   );
   const awaiting = queue.data ?? [];
 
@@ -99,7 +103,7 @@ export function KpiSection({ userId }: { userId: string }) {
   });
 
   const approveMutation = useMutation({
-    mutationFn: (id: string) => approveReport(id),
+    mutationFn: (id: string) => approveReport(id, userId),
     onSuccess: (result) => {
       invalidate();
       toastQueuedNotifications(result.notifications);
@@ -108,7 +112,7 @@ export function KpiSection({ userId }: { userId: string }) {
   });
 
   const rejectMutation = useMutation({
-    mutationFn: (id: string) => rejectReport(id),
+    mutationFn: (id: string) => rejectReport(id, userId),
     onSuccess: (result) => {
       invalidate();
       toastQueuedNotifications(result.notifications);

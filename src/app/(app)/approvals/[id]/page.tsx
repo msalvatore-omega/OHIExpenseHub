@@ -9,7 +9,7 @@ export default async function ApprovalDetailPage({
 }) {
   const { id } = await params;
   return (
-    <RoleGuard allow={["APPROVER", "ADMIN"]}>
+    <RoleGuard allow={["APPROVER", "ADMIN", "ACCOUNTING"]}>
       <ApprovalDetail reportId={id} />
     </RoleGuard>
   );

@@ -5,12 +5,16 @@
 
 import { STORAGE_KEY } from "@/lib/constants";
 import {
+  buildApprovalGroupMembers,
+  buildApprovalGroups,
   buildExpenseTypes,
   buildSystemSettings,
   createSeedData,
   type Database,
 } from "@/lib/data/seed";
 import type {
+  ApprovalGroup,
+  ApprovalGroupMember,
   ApprovalHistory,
   Delegate,
   ExpenseLineItem,
@@ -63,15 +67,32 @@ export function getDb(): Database {
   ) {
     db.expenseTypes = buildExpenseTypes();
   }
+  if (!db.approvalGroups) db.approvalGroups = buildApprovalGroups();
+  if (!db.approvalGroupMembers)
+    db.approvalGroupMembers = buildApprovalGroupMembers();
   for (const u of db.users) {
     if (u.isActive === undefined) u.isActive = true;
     if (u.approver1Id === undefined) u.approver1Id = null;
     if (u.approver2Id === undefined) u.approver2Id = null;
     if (u.approver3Id === undefined) u.approver3Id = null;
+    if (u.fastTrackThreshold === undefined) u.fastTrackThreshold = 0;
   }
   for (const r of db.receipts) {
     if (r.uploadedById === undefined) r.uploadedById = r.userId;
     if (r.source === undefined) r.source = "UPLOAD";
+  }
+  // Migrate IN_REVIEW reports that are actually parked at a group step.
+  for (const r of db.reports) {
+    if ((r.status as string) === "IN_REVIEW") {
+      const pending = db.approvalHistory.find(
+        (h) => h.reportId === r.id && h.action === "PENDING" && h.approvalGroupId
+      );
+      if (pending?.approvalGroupId) {
+        const group = db.approvalGroups.find((g) => g.id === pending.approvalGroupId);
+        if (group?.key === "ACCOUNTING") r.status = "ACCOUNTING_REVIEW";
+        else if (group?.key === "EXECUTIVE") r.status = "EXECUTIVE_REVIEW";
+      }
+    }
   }
   persist();
   return db;
@@ -338,6 +359,17 @@ export function insertApprovalHistory(entry: ApprovalHistory): ApprovalHistory {
   return entry;
 }
 
+export function patchApprovalHistory(
+  id: string,
+  patch: Partial<ApprovalHistory>
+): ApprovalHistory | undefined {
+  const entry = getDb().approvalHistory.find((h) => h.id === id);
+  if (!entry) return undefined;
+  Object.assign(entry, patch);
+  persist();
+  return entry;
+}
+
 /** Drop all approval-history entries for a report (resets the workflow). */
 export function clearApprovalHistory(reportId: string): void {
   const data = getDb();
@@ -358,6 +390,34 @@ export function insertChangeLog(entry: ReportChangeLog): ReportChangeLog {
   getDb().changeLogs.push(entry);
   persist();
   return entry;
+}
+
+// ---- Approval groups ----
+
+export function listApprovalGroups(): ApprovalGroup[] {
+  return getDb().approvalGroups;
+}
+
+export function listApprovalGroupMembers(): ApprovalGroupMember[] {
+  return getDb().approvalGroupMembers;
+}
+
+export function insertApprovalGroupMember(
+  member: ApprovalGroupMember
+): ApprovalGroupMember {
+  getDb().approvalGroupMembers.push(member);
+  persist();
+  return member;
+}
+
+export function removeApprovalGroupMember(id: string): boolean {
+  const data = getDb();
+  const exists = data.approvalGroupMembers.some((m) => m.id === id);
+  data.approvalGroupMembers = data.approvalGroupMembers.filter(
+    (m) => m.id !== id
+  );
+  persist();
+  return exists;
 }
 
 // ---- Mock email outbox ----

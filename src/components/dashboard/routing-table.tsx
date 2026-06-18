@@ -60,24 +60,33 @@ export function RoutingTable({ userId }: { userId: string }) {
                 </TableCell>
               </TableRow>
             ) : (
-              rows.map(({ report, submitterName, approverName, step }) => (
-                <TableRow key={report.id}>
-                  <TableCell className="font-medium">
-                    <span className="block truncate">{report.reportName}</span>
-                    <span className="text-xs text-muted-foreground tabular-nums">
-                      {formatCurrency(report.totalAmount)}
-                    </span>
-                  </TableCell>
-                  <TableCell>{submitterName}</TableCell>
-                  <TableCell>{approverName}</TableCell>
-                  <TableCell className="text-muted-foreground tabular-nums">
-                    {step}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <StatusPill status={report.status} />
-                  </TableCell>
-                </TableRow>
-              ))
+              rows.map(
+                ({ report, submitterName, approverName, step, fastTracked }) => (
+                  <TableRow key={report.id}>
+                    <TableCell className="font-medium">
+                      <span className="block truncate">{report.reportName}</span>
+                      <span className="text-xs text-muted-foreground tabular-nums">
+                        {formatCurrency(report.totalAmount)}
+                      </span>
+                    </TableCell>
+                    <TableCell>{submitterName}</TableCell>
+                    <TableCell>{approverName}</TableCell>
+                    <TableCell className="text-muted-foreground">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span>{step}</span>
+                        {fastTracked && (
+                          <span className="inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-950 dark:text-amber-300">
+                            Fast-tracked
+                          </span>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <StatusPill status={report.status} />
+                    </TableCell>
+                  </TableRow>
+                )
+              )
             )}
           </TableBody>
         </Table>

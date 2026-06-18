@@ -34,7 +34,14 @@ const PALETTE = [
 ];
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const STATUSES: ReportStatus[] = [
-  "DRAFT", "SUBMITTED", "IN_REVIEW", "APPROVED", "REJECTED", "PAID",
+  "DRAFT",
+  "SUBMITTED",
+  "IN_REVIEW",
+  "ACCOUNTING_REVIEW",
+  "EXECUTIVE_REVIEW",
+  "APPROVED",
+  "REJECTED",
+  "PAID",
 ];
 
 const money = (v: unknown) => formatCurrency(Number(v));

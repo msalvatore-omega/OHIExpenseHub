@@ -22,7 +22,7 @@ import {
 
 export default function ApprovalsPage() {
   return (
-    <RoleGuard allow={["APPROVER", "ADMIN"]}>
+    <RoleGuard allow={["APPROVER", "ADMIN", "ACCOUNTING"]}>
       <ApprovalsList />
     </RoleGuard>
   );

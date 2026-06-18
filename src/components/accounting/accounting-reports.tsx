@@ -71,6 +71,8 @@ const REPORT_STATUSES: ReportStatus[] = [
   "DRAFT",
   "SUBMITTED",
   "IN_REVIEW",
+  "ACCOUNTING_REVIEW",
+  "EXECUTIVE_REVIEW",
   "APPROVED",
   "REJECTED",
   "PAID",

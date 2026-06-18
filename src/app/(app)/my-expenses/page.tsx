@@ -36,7 +36,14 @@ import {
 } from "@/components/ui/table";
 
 const STATUSES: ReportStatus[] = [
-  "DRAFT", "SUBMITTED", "IN_REVIEW", "APPROVED", "REJECTED", "PAID",
+  "DRAFT",
+  "SUBMITTED",
+  "IN_REVIEW",
+  "ACCOUNTING_REVIEW",
+  "EXECUTIVE_REVIEW",
+  "APPROVED",
+  "REJECTED",
+  "PAID",
 ];
 
 export default function MyExpensesPage() {

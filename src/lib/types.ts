@@ -8,6 +8,8 @@ export type ReportStatus =
   | "DRAFT"
   | "SUBMITTED"
   | "IN_REVIEW"
+  | "ACCOUNTING_REVIEW"
+  | "EXECUTIVE_REVIEW"
   | "APPROVED"
   | "REJECTED"
   | "PAID";
@@ -44,6 +46,12 @@ export interface User {
   approver1Id: string | null;
   approver2Id: string | null;
   approver3Id: string | null;
+  /**
+   * Fast-track threshold (USD). If 0, every report goes through the full
+   * approver chain. If > 0, reports below this amount skip Approvers #2/#3 and
+   * go straight to the Accounting + Executive groups.
+   */
+  fastTrackThreshold: number;
 }
 
 /** Input for creating a new user (azureAdId is set later, on first AD login). */
@@ -53,6 +61,39 @@ export interface CreateUserInput {
   department: string;
   role: UserRole;
   managerId: string | null;
+  fastTrackThreshold?: number;
+}
+
+/** The two mandatory approval groups. */
+export type ApprovalGroupKey = "ACCOUNTING" | "EXECUTIVE";
+
+export interface ApprovalGroup {
+  id: string;
+  key: ApprovalGroupKey;
+  name: string;
+  createdAt: string;
+}
+
+/** Membership of a user in an approval group (M2M). */
+export interface ApprovalGroupMember {
+  id: string;
+  groupId: string;
+  userId: string;
+  isActive: boolean;
+  createdAt: string;
+}
+
+/** An approval group with its members resolved, for the Admin tab. */
+export interface ApprovalGroupWithMembers {
+  group: ApprovalGroup;
+  members: {
+    /** The membership row id. */
+    id: string;
+    userId: string;
+    name: string;
+    /** Whether the member is active (membership + user both active). */
+    isActive: boolean;
+  }[];
 }
 
 export interface Delegate {
@@ -132,7 +173,10 @@ export interface Receipt {
 export interface ApprovalHistory {
   id: string;
   reportId: string;
+  /** The acting user. Empty for a group step that is pending (no one yet). */
   approverId: string;
+  /** Set when this entry belongs to an approval-group step. */
+  approvalGroupId?: string;
   action: ApprovalAction;
   comment?: string;
   createdAt: string;
@@ -217,9 +261,12 @@ export interface DeleteReportResult {
 export interface ReportRoutingRow {
   report: ExpenseReport;
   submitterName: string;
+  /** Who/what the report is currently with (user name or group name). */
   approverName: string;
-  /** Human-readable workflow position, e.g. "1 of 1". */
+  /** Current step label, e.g. "Approver 1", "Accounting Approval". */
   step: string;
+  /** True when the report took the fast-track chain (skipped Approvers #2/#3). */
+  fastTracked: boolean;
 }
 
 export interface ReportFilter {
