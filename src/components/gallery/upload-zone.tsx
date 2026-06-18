@@ -73,18 +73,18 @@ export function UploadZone({
         </div>
       </div>
 
-      {/* Mobile: capture + upload */}
-      <div className="grid grid-cols-2 gap-3 md:hidden">
+      {/* Mobile: capture + upload — stacks on small phones, side-by-side on sm+ */}
+      <div className="flex flex-col gap-3 sm:flex-row md:hidden">
         <CameraCaptureButton
           onFiles={onFiles}
           processing={processing}
-          className={cn(buttonVariants(), "h-12")}
+          className={cn(buttonVariants(), "h-12 flex-1")}
         />
         <Button
           type="button"
           variant="outline"
           onClick={() => browseInput.current?.click()}
-          className="h-12"
+          className="h-12 flex-1"
         >
           <Upload className="size-5" />
           Upload from Device

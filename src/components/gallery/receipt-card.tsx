@@ -36,7 +36,7 @@ export function ReceiptCard({
       onClick={onToggle}
       aria-pressed={selected}
       className={cn(
-        "group relative flex flex-col gap-3 rounded-xl border bg-card p-3 text-left shadow-sm transition-all hover:shadow-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+        "group relative flex w-full min-w-0 flex-col gap-3 rounded-xl border bg-card p-3 text-left shadow-sm transition-all hover:shadow-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
         selected ? "border-primary ring-1 ring-primary" : "border-border"
       )}
     >

@@ -36,7 +36,10 @@ export function ReceiptThumb({
       src={receipt.imageUrl}
       alt={receipt.merchantName ?? "Receipt"}
       onError={() => setErrored(true)}
-      className={cn("rounded-md border border-border object-cover", className)}
+      className={cn(
+        "max-w-full rounded-md border border-border object-cover",
+        className
+      )}
     />
   );
 }

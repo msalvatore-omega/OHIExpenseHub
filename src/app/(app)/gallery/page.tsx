@@ -120,7 +120,7 @@ export default function GalleryPage() {
   });
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-6 py-8">
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 overflow-x-hidden px-3 py-8 sm:px-4 md:px-6">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1>Receipt Gallery</h1>
@@ -159,7 +159,11 @@ export default function GalleryPage() {
 
       {/* Filters */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <Tabs value={filter} onValueChange={(v) => setFilter(v as Filter)}>
+        <Tabs
+          value={filter}
+          onValueChange={(v) => setFilter(v as Filter)}
+          className="max-w-full overflow-x-auto"
+        >
           <TabsList>
             <TabsTrigger value="all">All</TabsTrigger>
             <TabsTrigger value="unattached">Unattached</TabsTrigger>
@@ -167,12 +171,12 @@ export default function GalleryPage() {
           </TabsList>
         </Tabs>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Input
             type="date"
             value={dateFrom}
             onChange={(e) => setDateFrom(e.target.value)}
-            className="w-auto"
+            className="w-auto min-w-0"
             aria-label="From date"
           />
           <span className="text-sm text-muted-foreground">to</span>
@@ -180,7 +184,7 @@ export default function GalleryPage() {
             type="date"
             value={dateTo}
             onChange={(e) => setDateTo(e.target.value)}
-            className="w-auto"
+            className="w-auto min-w-0"
             aria-label="To date"
           />
           {(dateFrom || dateTo) && (
@@ -201,7 +205,7 @@ export default function GalleryPage() {
 
       {/* Grid */}
       {receiptsQuery.isLoading ? (
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
           {Array.from({ length: 6 }).map((_, i) => (
             <Skeleton key={i} className="h-56 w-full rounded-xl" />
           ))}
@@ -217,7 +221,7 @@ export default function GalleryPage() {
             : "No receipts match these filters."}
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-3 pb-20 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 pb-20 sm:grid-cols-2 md:grid-cols-3">
           {filtered.map((r) => (
             <ReceiptCard
               key={r.id}
@@ -231,12 +235,12 @@ export default function GalleryPage() {
 
       {/* Multi-select action bar */}
       {selected.size > 0 && (
-        <div className="fixed inset-x-0 bottom-16 z-40 mx-auto flex max-w-3xl items-center justify-between gap-3 rounded-xl border border-border bg-background/95 px-4 py-3 shadow-lg backdrop-blur md:bottom-6">
+        <div className="fixed inset-x-3 bottom-16 z-40 mx-auto flex max-w-3xl flex-col gap-2 rounded-xl border border-border bg-background/95 px-4 py-3 shadow-lg backdrop-blur sm:flex-row sm:items-center sm:justify-between md:inset-x-0 md:bottom-6">
           <span className="text-sm font-medium">
             {selected.size}{" "}
             {selected.size === 1 ? "receipt" : "receipts"} selected
           </span>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
             <Button
               variant="ghost"
               size="sm"
@@ -248,6 +252,7 @@ export default function GalleryPage() {
               size="sm"
               disabled={createReport.isPending}
               onClick={() => createReport.mutate()}
+              className="h-auto max-w-full whitespace-normal text-center"
             >
               {createReport.isPending ? (
                 <Loader2 className="size-4 animate-spin" />
