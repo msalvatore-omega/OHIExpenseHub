@@ -18,11 +18,11 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { Loader2, Plus, Trash2 } from "lucide-react";
+import { Loader2, Plus, Trash2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 
 import { MILEAGE_RATE } from "@/lib/constants";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatDate } from "@/lib/format";
 import {
   attachReceipt,
   deleteReport,
@@ -196,6 +196,14 @@ function EditorForm({
   const { fields, append, remove } = useFieldArray({ control, name: "lineItems" });
 
   const isDraft = report.status === "DRAFT";
+
+  const rejectionHistory = React.useMemo(
+    () =>
+      report.approvalHistory
+        .filter((h) => h.action === "REJECTED")
+        .sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
+    [report.approvalHistory]
+  );
 
   // ---- live total + derived Paid To ----
   const watchedItems = useWatch({ control, name: "lineItems" }) ?? [];
@@ -438,6 +446,37 @@ function EditorForm({
             Add Line Item
           </button>
         </section>
+
+        {/* Rejection history — read-only, only while DRAFT and rejections exist */}
+        {isDraft && rejectionHistory.length > 0 && (
+          <section className="flex flex-col gap-3 rounded-xl border border-red-200 bg-red-50/60 p-4 dark:border-red-900 dark:bg-red-950/20">
+            <h2 className="flex items-center gap-2 text-sm font-semibold text-red-700 dark:text-red-400">
+              <XCircle className="size-4 shrink-0" />
+              Rejection History
+            </h2>
+            <ol className="flex flex-col gap-3">
+              {rejectionHistory.map((h) => (
+                <li
+                  key={h.id}
+                  className="flex flex-col gap-1.5 rounded-lg border border-red-200 bg-background p-3 dark:border-red-900"
+                >
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+                    <span className="font-semibold text-red-700 dark:text-red-400">
+                      {usersById.get(h.approverId) ?? "Reviewer"}
+                    </span>
+                    <span>·</span>
+                    <span>{formatDate(h.createdAt)}</span>
+                  </div>
+                  {h.comment && (
+                    <p className="rounded bg-red-50 px-2.5 py-1.5 text-sm leading-snug text-red-900 dark:bg-red-950/40 dark:text-red-200">
+                      {h.comment}
+                    </p>
+                  )}
+                </li>
+              ))}
+            </ol>
+          </section>
+        )}
 
         {/* Sticky action bar (sits above the mobile tab bar) */}
         <div className="sticky bottom-16 z-30 -mx-6 flex items-center justify-between gap-2 border-t border-border bg-background/95 px-6 py-3 backdrop-blur md:bottom-0">

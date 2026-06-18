@@ -7,7 +7,7 @@
 
 import {
   canAccessGallery,
-  clearApprovalHistory,
+  clearWorkflowHistory,
   findReceipt,
   findReport,
   getSettingValue,
@@ -845,90 +845,53 @@ export async function approveReport(
   return { report: updated, notifications };
 }
 
+/**
+ * Reject a report and return it to DRAFT for revision. A reason is required.
+ * The REJECTED ApprovalHistory entry is preserved so the employee can see
+ * every rejection note; PENDING and APPROVED workflow entries are cleared so
+ * resubmission restarts the chain from Approver #1.
+ */
 export async function rejectReport(
   id: string,
   actorId: string,
-  comment?: string
+  comment: string
 ): Promise<ApprovalActionResult> {
   await delay();
   const report = findReport(id);
   if (!report) throw new Error(`Report ${id} not found`);
+
+  const trimmedComment = comment.trim();
+  if (!trimmedComment) throw new Error("A reason is required to reject a report.");
 
   const timestamp = nowIso();
   const chain = buildChain(report);
   const step = chain[approvalCount(report)];
   const actorName = userName(actorId);
   const stepLabel = step ? stepLabelOf(step, chain) : "Approval";
+  const prevStatus = report.status;
 
+  // Insert the REJECTED record before clearing so it is not lost.
   insertApprovalHistory({
     id: newId("history"),
     reportId: id,
     approverId: actorId,
     approvalGroupId: step?.kind === "group" ? step.groupId : undefined,
     action: "REJECTED",
-    comment,
+    comment: trimmedComment,
     createdAt: timestamp,
   });
-  const prevStatus = report.status;
-  const updated = patchReport(id, { status: "REJECTED" })!;
-  recordChange(id, actorId, "STATUS", `${stepLabel} rejected by ${actorName}`, {
-    field: "status",
-    oldValue: prevStatus,
-    newValue: "REJECTED",
-    note: comment,
-  });
 
-  const notifications: MockEmail[] = [];
-  const submitter = userById(report.submitterId);
-  if (submitter) {
-    notifications.push(
-      sendMockEmail(
-        submitter.email,
-        `Changes Requested: ${report.reportName}`,
-        `Your expense report (${report.reportName}) was rejected by ${actorName} at ${stepLabel}.${comment ? ` Reason: ${comment}` : ""}`
-      )
-    );
-  }
-  return { report: updated, notifications };
-}
+  // Clear only PENDING and APPROVED entries so the REJECTED history accumulates
+  // across resubmission cycles and approvalCount resets to 0 on next submit.
+  clearWorkflowHistory(id);
 
-/**
- * Return a report to the employee for revision. Distinct from rejection: the
- * report goes back to DRAFT with a REQUIRED reason, and the approval workflow is
- * fully reset (all in-progress approval state cleared) so a later resubmission
- * starts over from Approver #1 — it does not resume the step it was on.
- */
-export async function sendBackReport(
-  id: string,
-  actorId: string,
-  reason: string
-): Promise<ApprovalActionResult> {
-  await delay();
-  const report = findReport(id);
-  if (!report) throw new Error(`Report ${id} not found`);
-
-  const trimmedReason = reason.trim();
-  if (!trimmedReason) {
-    throw new Error("A reason is required to send a report back.");
-  }
-
-  const chain = buildChain(report);
-  const step = chain[approvalCount(report)];
-  const stepLabel = step ? stepLabelOf(step, chain) : "approval";
-  const actorName = userName(actorId);
-
-  // Reset the workflow: drop every approval-history entry (pending + decisions)
-  // so resubmission re-routes from the head of the chain (Approver #1).
-  clearApprovalHistory(id);
-
-  const prevStatus = report.status;
   const updated = patchReport(id, { status: "DRAFT" })!;
   recordChange(
     id,
     actorId,
     "STATUS",
-    `Sent back to employee from ${stepLabel} by ${actorName}`,
-    { field: "status", oldValue: prevStatus, newValue: "DRAFT", note: trimmedReason }
+    `Rejected by ${actorName} at ${stepLabel} — returned to employee`,
+    { field: "status", oldValue: prevStatus, newValue: "DRAFT", note: trimmedComment }
   );
 
   const notifications: MockEmail[] = [];
@@ -937,12 +900,33 @@ export async function sendBackReport(
     notifications.push(
       sendMockEmail(
         submitter.email,
-        `Returned for Revision: ${report.reportName}`,
-        `Your expense report (${report.reportName}) was returned by ${actorName} and is back in your drafts to edit and resubmit. Reason: ${trimmedReason}\n\nEdit it here: /reports/${id}/edit`
+        `Changes Required: ${report.reportName}`,
+        `Your expense report (${report.reportName}) was rejected by ${actorName} at ${stepLabel} and has been returned to your drafts for revision.\n\nReason: ${trimmedComment}\n\nEdit it here: /reports/${id}/edit`
       )
     );
   }
   return { report: updated, notifications };
+}
+
+/**
+ * Returns the IDs of DRAFT reports (belonging to userId) that have at least
+ * one REJECTED ApprovalHistory entry. Used to flag rejected-and-returned
+ * drafts on the dashboard without fetching full history per report.
+ */
+export async function getDraftRejectionIds(userId: string): Promise<string[]> {
+  await delay(50, 150);
+  const myDraftIds = new Set(
+    listReports()
+      .filter((r) => r.status === "DRAFT" && involvesUser(r, userId))
+      .map((r) => r.id)
+  );
+  const out = new Set<string>();
+  for (const h of listApprovalHistory()) {
+    if (h.action === "REJECTED" && myDraftIds.has(h.reportId)) {
+      out.add(h.reportId);
+    }
+  }
+  return [...out];
 }
 
 export async function markPaid(

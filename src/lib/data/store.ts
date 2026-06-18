@@ -379,6 +379,22 @@ export function clearApprovalHistory(reportId: string): void {
   persist();
 }
 
+/**
+ * Remove only PENDING and APPROVED entries for a report, preserving REJECTED
+ * records so the full rejection history accumulates across resubmission cycles.
+ */
+export function clearWorkflowHistory(reportId: string): void {
+  const data = getDb();
+  data.approvalHistory = data.approvalHistory.filter(
+    (h) =>
+      !(
+        h.reportId === reportId &&
+        (h.action === "PENDING" || h.action === "APPROVED")
+      )
+  );
+  persist();
+}
+
 // ---- Report change log (audit trail) ----
 
 export function listChangeLogs(reportId?: string): ReportChangeLog[] {

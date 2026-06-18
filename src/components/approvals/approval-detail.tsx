@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, CornerUpLeft, Loader2, XCircle } from "lucide-react";
+import { CheckCircle2, Loader2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 
 import { cn } from "@/lib/utils";
@@ -15,7 +15,6 @@ import {
   getUsers,
   rejectReport,
   savePendingNote,
-  sendBackReport,
 } from "@/lib/data";
 import { toastQueuedNotifications } from "@/lib/notify";
 import { useSession } from "@/lib/auth/mock-session";
@@ -65,8 +64,8 @@ export function ApprovalDetail({ reportId }: { reportId: string }) {
 
   const [comment, setComment] = React.useState("");
   const commentInitialized = React.useRef(false);
-  const [sendBackOpen, setSendBackOpen] = React.useState(false);
-  const [sendBackReason, setSendBackReason] = React.useState("");
+  const [rejectOpen, setRejectOpen] = React.useState(false);
+  const [rejectNote, setRejectNote] = React.useState("");
 
   const autosaveTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -114,25 +113,15 @@ export function ApprovalDetail({ reportId }: { reportId: string }) {
   });
 
   const rejectMutation = useMutation({
-    mutationFn: () => rejectReport(reportId, user.id, comment.trim()),
+    mutationFn: () => rejectReport(reportId, user.id, rejectNote.trim()),
     onSuccess: (result) => {
       toastQueuedNotifications(result.notifications);
+      setRejectOpen(false);
+      setRejectNote("");
       afterDecision();
     },
     onError: (e) =>
       toast.error(e instanceof Error ? e.message : "Could not reject"),
-  });
-
-  const sendBackMutation = useMutation({
-    mutationFn: () => sendBackReport(reportId, user.id, sendBackReason.trim()),
-    onSuccess: (result) => {
-      toastQueuedNotifications(result.notifications);
-      setSendBackOpen(false);
-      setSendBackReason("");
-      afterDecision();
-    },
-    onError: (e) =>
-      toast.error(e instanceof Error ? e.message : "Could not send back"),
   });
 
   const handleCommentChange = (text: string) => {
@@ -149,10 +138,7 @@ export function ApprovalDetail({ reportId }: { reportId: string }) {
     }, 1500);
   };
 
-  const busy =
-    approveMutation.isPending ||
-    rejectMutation.isPending ||
-    sendBackMutation.isPending;
+  const busy = approveMutation.isPending || rejectMutation.isPending;
 
   const status = reportQuery.data?.status;
   const open =
@@ -225,7 +211,7 @@ export function ApprovalDetail({ reportId }: { reportId: string }) {
             {stepLabel} notes
           </label>
           <Textarea
-            placeholder="Write a note (required to reject)…"
+            placeholder="Write a note for this step (optional)…"
             value={comment}
             onChange={(e) => handleCommentChange(e.target.value)}
             rows={2}
@@ -236,23 +222,11 @@ export function ApprovalDetail({ reportId }: { reportId: string }) {
           <Button
             variant="outline"
             className="border-red-300 text-red-600 hover:bg-red-50 hover:text-red-700 dark:border-red-900 dark:hover:bg-red-950"
-            disabled={busy || comment.trim().length === 0}
-            onClick={() => rejectMutation.mutate()}
-          >
-            {rejectMutation.isPending ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : (
-              <XCircle className="size-4" />
-            )}
-            Reject
-          </Button>
-          <Button
-            variant="outline"
             disabled={busy}
-            onClick={() => setSendBackOpen(true)}
+            onClick={() => setRejectOpen(true)}
           >
-            <CornerUpLeft className="size-4" />
-            Send back to employee
+            <XCircle className="size-4" />
+            Reject
           </Button>
           <Button
             className="bg-green-600 text-white hover:bg-green-700"
@@ -269,28 +243,28 @@ export function ApprovalDetail({ reportId }: { reportId: string }) {
         </div>
       </div>
 
-      {/* Send back to employee — requires a reason */}
+      {/* Reject — requires a mandatory reason; returns report to DRAFT */}
       <Dialog
-        open={sendBackOpen}
+        open={rejectOpen}
         onOpenChange={(o) => {
           if (busy) return;
-          setSendBackOpen(o);
-          if (!o) setSendBackReason("");
+          setRejectOpen(o);
+          if (!o) setRejectNote("");
         }}
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Send back to employee</DialogTitle>
+            <DialogTitle>Reject report</DialogTitle>
             <DialogDescription>
-              The report returns to the employee&apos;s drafts to edit and
-              resubmit. Resubmitting restarts approval from the first approver.
-              A reason is required.
+              This report will be returned to the employee&apos;s drafts for
+              revision. When they resubmit, approval restarts from the first
+              approver. A reason is required.
             </DialogDescription>
           </DialogHeader>
           <Textarea
-            placeholder="Reason for returning this report…"
-            value={sendBackReason}
-            onChange={(e) => setSendBackReason(e.target.value)}
+            placeholder="Reason for rejection…"
+            value={rejectNote}
+            onChange={(e) => setRejectNote(e.target.value)}
             rows={3}
             autoFocus
           />
@@ -298,27 +272,26 @@ export function ApprovalDetail({ reportId }: { reportId: string }) {
             <Button
               variant="outline"
               type="button"
-              disabled={sendBackMutation.isPending}
+              disabled={rejectMutation.isPending}
               onClick={() => {
-                setSendBackOpen(false);
-                setSendBackReason("");
+                setRejectOpen(false);
+                setRejectNote("");
               }}
             >
               Cancel
             </Button>
             <Button
               type="button"
-              disabled={
-                sendBackMutation.isPending || sendBackReason.trim().length === 0
-              }
-              onClick={() => sendBackMutation.mutate()}
+              variant="destructive"
+              disabled={rejectMutation.isPending || rejectNote.trim().length === 0}
+              onClick={() => rejectMutation.mutate()}
             >
-              {sendBackMutation.isPending ? (
+              {rejectMutation.isPending ? (
                 <Loader2 className="size-4 animate-spin" />
               ) : (
-                <CornerUpLeft className="size-4" />
+                <XCircle className="size-4" />
               )}
-              Send back
+              Reject
             </Button>
           </DialogFooter>
         </DialogContent>

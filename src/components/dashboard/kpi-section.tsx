@@ -19,7 +19,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { Pencil, Trash2 } from "lucide-react";
+import { Loader2, Pencil, Trash2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 
 import { cn } from "@/lib/utils";
@@ -35,6 +35,7 @@ import { deletedReportMessage, toastQueuedNotifications } from "@/lib/notify";
 import type { ExpenseReport, ReportRoutingRow } from "@/lib/types";
 import {
   useApprovalQueue,
+  useDraftRejectionIds,
   useInvalidateDashboard,
   useMyReports,
 } from "@/components/dashboard/use-dashboard-data";
@@ -43,10 +44,13 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -62,10 +66,32 @@ const MONTHS = [
   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
 ];
 
+const SEEN_KEY = "ohi-rejected-seen";
+
+function readSeenIds(): Set<string> {
+  try {
+    const raw = sessionStorage.getItem(SEEN_KEY);
+    return new Set(raw ? (JSON.parse(raw) as string[]) : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function writeSeenIds(ids: Set<string>): void {
+  try {
+    sessionStorage.setItem(SEEN_KEY, JSON.stringify([...ids]));
+  } catch {}
+}
+
 export function KpiSection({ userId }: { userId: string }) {
   const myReports = useMyReports(userId);
   const queue = useApprovalQueue(userId);
+  const rejectionQuery = useDraftRejectionIds(userId);
   const invalidate = useInvalidateDashboard();
+
+  // Per-session "seen" tracking: once the Drafts modal is opened, all currently-
+  // rejected draft IDs are marked seen in sessionStorage so the badge clears.
+  const [seenIds, setSeenIds] = React.useState<Set<string>>(readSeenIds);
 
   const reports = myReports.data ?? [];
   const drafts = reports.filter((r) => r.status === "DRAFT");
@@ -85,9 +111,19 @@ export function KpiSection({ userId }: { userId: string }) {
       new Date(r.updatedAt).getFullYear() === currentYear
   );
   const paidTotal = paidYtd.reduce((sum, r) => sum + r.totalAmount, 0);
-  // The drill-down charts/table use a rolling 12-month window, so the body
-  // receives every paid report the user is involved in and windows internally.
   const paidReports = reports.filter((r) => r.status === "PAID");
+
+  const rejectedIds = rejectionQuery.data ?? new Set<string>();
+  const unseenRejectedCount = [...rejectedIds].filter(
+    (id) => !seenIds.has(id)
+  ).length;
+
+  const handleDraftsOpen = () => {
+    const next = new Set(seenIds);
+    for (const id of rejectedIds) next.add(id);
+    setSeenIds(next);
+    writeSeenIds(next);
+  };
 
   // ---- mutations ----
   const onMutationError = (err: unknown) =>
@@ -112,7 +148,8 @@ export function KpiSection({ userId }: { userId: string }) {
   });
 
   const rejectMutation = useMutation({
-    mutationFn: (id: string) => rejectReport(id, userId),
+    mutationFn: ({ id, note }: { id: string; note: string }) =>
+      rejectReport(id, userId, note),
     onSuccess: (result) => {
       invalidate();
       toastQueuedNotifications(result.notifications);
@@ -127,10 +164,13 @@ export function KpiSection({ userId }: { userId: string }) {
         label="Draft Reports"
         value={String(drafts.length)}
         loading={myReports.isLoading}
+        badge={unseenRejectedCount}
+        onOpen={handleDraftsOpen}
       >
         <DraftsBody
           loading={myReports.isLoading}
           drafts={drafts}
+          rejectedIds={rejectedIds}
           onDelete={(id) => deleteMutation.mutate(id)}
           deletingId={
             deleteMutation.isPending
@@ -159,7 +199,7 @@ export function KpiSection({ userId }: { userId: string }) {
           loading={queue.isLoading}
           rows={awaiting}
           onApprove={(id) => approveMutation.mutate(id)}
-          onReject={(id) => rejectMutation.mutate(id)}
+          onReject={(id, note) => rejectMutation.mutate({ id, note })}
           busy={approveMutation.isPending || rejectMutation.isPending}
         />
       </KpiCard>
@@ -184,24 +224,39 @@ function KpiCard({
   value,
   loading,
   dialogClassName,
+  badge,
+  onOpen,
   children,
 }: {
   label: string;
   value: string;
   loading: boolean;
   dialogClassName?: string;
+  badge?: number;
+  onOpen?: () => void;
   children: React.ReactNode;
 }) {
+  const hasAlert = Boolean(badge && badge > 0);
   return (
-    <Dialog>
+    <Dialog onOpenChange={(open) => { if (open && onOpen) onOpen(); }}>
       <DialogTrigger
         render={
           <button
             type="button"
-            className="flex w-full flex-col items-start gap-1 rounded-xl border border-border bg-card p-4 text-left shadow-sm transition-colors hover:bg-accent/40 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            className={cn(
+              "relative flex w-full flex-col items-start gap-1 rounded-xl border p-4 text-left shadow-sm transition-colors hover:bg-accent/40 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+              hasAlert
+                ? "border-red-300 bg-card dark:border-red-800"
+                : "border-border bg-card"
+            )}
           />
         }
       >
+        {hasAlert && (
+          <span className="absolute right-2 top-2 flex min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 px-1 py-0.5 text-[10px] font-bold leading-none text-white">
+            {badge! > 99 ? "99+" : badge}
+          </span>
+        )}
         <span className="text-xs font-medium text-muted-foreground">
           {label}
         </span>
@@ -246,60 +301,85 @@ function RowsSkeleton({ rows = 3 }: { rows?: number }) {
 function DraftsBody({
   loading,
   drafts,
+  rejectedIds,
   onDelete,
   deletingId,
 }: {
   loading: boolean;
   drafts: ExpenseReport[];
+  rejectedIds: Set<string>;
   onDelete: (id: string) => void;
   deletingId: string | null;
 }) {
   const router = useRouter();
 
+  const sorted = React.useMemo(
+    () =>
+      [...drafts].sort((a, b) => {
+        const ar = rejectedIds.has(a.id) ? 0 : 1;
+        const br = rejectedIds.has(b.id) ? 0 : 1;
+        return ar - br;
+      }),
+    [drafts, rejectedIds]
+  );
+
   if (loading) return <RowsSkeleton />;
-  if (drafts.length === 0) return <EmptyState message="No draft reports." />;
+  if (sorted.length === 0) return <EmptyState message="No draft reports." />;
 
   return (
     <ul className="flex flex-col gap-2">
-      {drafts.map((r) => (
-        <li
-          key={r.id}
-          className="flex items-center justify-between gap-3 rounded-lg border border-border p-3"
-        >
-          <div className="min-w-0">
-            <p className="truncate text-sm font-medium">{r.reportName}</p>
-            <p className="text-xs text-muted-foreground tabular-nums">
-              {formatCurrency(r.totalAmount)}
-            </p>
-          </div>
-          <div className="flex shrink-0 gap-1">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => router.push(`/reports/${r.id}/edit`)}
-            >
-              <Pencil className="size-3.5" />
-              Edit
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-destructive hover:text-destructive"
-              disabled={deletingId === r.id}
-              onClick={() => {
-                if (
-                  window.confirm(`Delete draft "${r.reportName}"?`)
-                ) {
-                  onDelete(r.id);
-                }
-              }}
-            >
-              <Trash2 className="size-3.5" />
-              Delete
-            </Button>
-          </div>
-        </li>
-      ))}
+      {sorted.map((r) => {
+        const isRejected = rejectedIds.has(r.id);
+        return (
+          <li
+            key={r.id}
+            className={cn(
+              "flex items-center justify-between gap-3 rounded-lg border p-3",
+              isRejected
+                ? "border-red-200 dark:border-red-900"
+                : "border-border"
+            )}
+          >
+            <div className="min-w-0">
+              <p className="truncate text-sm font-medium">{r.reportName}</p>
+              <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+                <p className="text-xs text-muted-foreground tabular-nums">
+                  {formatCurrency(r.totalAmount)}
+                </p>
+                {isRejected && (
+                  <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold text-red-700 dark:bg-red-950/60 dark:text-red-400">
+                    Rejected — needs revision
+                  </span>
+                )}
+              </div>
+            </div>
+            <div className="flex shrink-0 gap-1">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => router.push(`/reports/${r.id}/edit`)}
+              >
+                <Pencil className="size-3.5" />
+                Edit
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-destructive hover:text-destructive"
+                disabled={deletingId === r.id}
+                onClick={() => {
+                  if (window.confirm(`Delete draft "${r.reportName}"?`)) {
+                    onDelete(r.id);
+                  }
+                }}
+              >
+                <Trash2 className="size-3.5" />
+                Delete
+              </Button>
+            </div>
+          </li>
+        );
+      })}
     </ul>
   );
 }
@@ -349,53 +429,114 @@ function AwaitingBody({
   loading: boolean;
   rows: ReportRoutingRow[];
   onApprove: (id: string) => void;
-  onReject: (id: string) => void;
+  onReject: (id: string, note: string) => void;
   busy: boolean;
 }) {
+  const [rejectingId, setRejectingId] = React.useState<string | null>(null);
+  const [rejectNote, setRejectNote] = React.useState("");
+
+  const handleRejectConfirm = () => {
+    if (!rejectingId || !rejectNote.trim()) return;
+    onReject(rejectingId, rejectNote.trim());
+    setRejectingId(null);
+    setRejectNote("");
+  };
+
   if (loading) return <RowsSkeleton />;
   if (rows.length === 0)
     return <EmptyState message="No reports awaiting your action." />;
 
   return (
-    <ul className="flex flex-col gap-2">
-      {rows.map(({ report, submitterName }) => (
-        <li
-          key={report.id}
-          className="flex flex-col gap-2 rounded-lg border border-border p-3"
-        >
-          <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <p className="truncate text-sm font-medium">
-                {report.reportName}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {submitterName} · {formatCurrency(report.totalAmount)}
-              </p>
+    <>
+      <ul className="flex flex-col gap-2">
+        {rows.map(({ report, submitterName }) => (
+          <li
+            key={report.id}
+            className="flex flex-col gap-2 rounded-lg border border-border p-3"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium">
+                  {report.reportName}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {submitterName} · {formatCurrency(report.totalAmount)}
+                </p>
+              </div>
+              <StatusPill status={report.status} />
             </div>
-            <StatusPill status={report.status} />
-          </div>
-          <div className="flex gap-2">
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                className="flex-1 bg-green-600 text-white hover:bg-green-700"
+                disabled={busy}
+                onClick={() => onApprove(report.id)}
+              >
+                Approve
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="flex-1 border-red-300 text-red-600 hover:bg-red-50 hover:text-red-700 dark:border-red-900 dark:hover:bg-red-950"
+                disabled={busy}
+                onClick={() => setRejectingId(report.id)}
+              >
+                Reject
+              </Button>
+            </div>
+          </li>
+        ))}
+      </ul>
+
+      <Dialog
+        open={rejectingId !== null}
+        onOpenChange={(o) => {
+          if (busy) return;
+          if (!o) { setRejectingId(null); setRejectNote(""); }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reject report</DialogTitle>
+            <DialogDescription>
+              The report will be returned to the employee&apos;s drafts.
+              Resubmitting restarts approval from the first approver.
+              A reason is required.
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            placeholder="Reason for rejection…"
+            value={rejectNote}
+            onChange={(e) => setRejectNote(e.target.value)}
+            rows={3}
+            autoFocus
+          />
+          <DialogFooter>
             <Button
-              size="sm"
-              className="flex-1 bg-green-600 text-white hover:bg-green-700"
+              variant="outline"
+              type="button"
               disabled={busy}
-              onClick={() => onApprove(report.id)}
+              onClick={() => { setRejectingId(null); setRejectNote(""); }}
             >
-              Approve
+              Cancel
             </Button>
             <Button
-              size="sm"
-              variant="outline"
-              className="flex-1 border-red-300 text-red-600 hover:bg-red-50 hover:text-red-700 dark:border-red-900 dark:hover:bg-red-950"
-              disabled={busy}
-              onClick={() => onReject(report.id)}
+              type="button"
+              variant="destructive"
+              disabled={busy || rejectNote.trim().length === 0}
+              onClick={handleRejectConfirm}
             >
+              {busy ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <XCircle className="size-4" />
+              )}
               Reject
             </Button>
-          </div>
-        </li>
-      ))}
-    </ul>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 

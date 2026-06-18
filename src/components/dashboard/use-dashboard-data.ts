@@ -7,6 +7,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
   getApprovalQueue,
+  getDraftRejectionIds,
   getMyReports,
   getRoutingForUser,
 } from "@/lib/data";
@@ -37,6 +38,14 @@ export function useRouting(userId: string) {
   return useQuery({
     queryKey: dashboardKeys.routing(userId),
     queryFn: () => getRoutingForUser(userId),
+  });
+}
+
+export function useDraftRejectionIds(userId: string) {
+  return useQuery({
+    queryKey: ["dashboard", "draft-rejections", userId] as const,
+    queryFn: () => getDraftRejectionIds(userId),
+    select: (ids) => new Set(ids),
   });
 }
 
