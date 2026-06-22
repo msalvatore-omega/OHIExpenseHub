@@ -48,11 +48,13 @@ import {
   replaceLineItemsForReport,
   listUserActivities,
   pruneUserActivities,
+  removeReceiptById,
   upsertSetting,
   userHasRelations,
 } from "@/lib/data/store";
 import {
   DEFAULT_APP_VERSION,
+  DEFAULT_RECEIPT_TRASH_RETENTION_DAYS,
   MILEAGE_RATE,
   SETTING_KEYS,
 } from "@/lib/constants";
@@ -1188,7 +1190,57 @@ export async function getReceipts(
     receipts = receipts.filter((r) => r.userId === filter.userId);
   if (filter?.isAttached !== undefined)
     receipts = receipts.filter((r) => r.isAttached === filter.isAttached);
+  // Default: only live receipts. Pass trashed:true to get the trash bin.
+  if (filter?.trashed) {
+    receipts = receipts.filter((r) => r.deletedAt != null);
+  } else {
+    receipts = receipts.filter((r) => r.deletedAt == null);
+  }
   return receipts.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+/** Soft-delete receipts (move to trash). Rejects attached receipts. */
+export async function trashReceipts(
+  ids: string[],
+  deletedById: string
+): Promise<void> {
+  await delay();
+  const ts = nowIso();
+  for (const id of ids) {
+    const r = findReceipt(id);
+    if (!r) continue;
+    if (r.isAttached) throw new ConflictError("Cannot trash an attached receipt — detach from the report first.");
+    patchReceipt(id, { deletedAt: ts, deletedById });
+  }
+}
+
+/** Restore soft-deleted receipts back to the live gallery. */
+export async function restoreReceipts(ids: string[]): Promise<void> {
+  await delay();
+  for (const id of ids) {
+    patchReceipt(id, { deletedAt: null, deletedById: null });
+  }
+}
+
+/** Permanently delete receipts (removes the row; no real blob in prototype). */
+export async function hardDeleteReceipts(ids: string[]): Promise<void> {
+  await delay();
+  for (const id of ids) {
+    removeReceiptById(id);
+  }
+}
+
+/** Auto-purge receipts whose trash retention window has elapsed. */
+export async function purgeExpiredTrash(): Promise<number> {
+  await delay();
+  const retentionDays =
+    parseInt(getSettingValue(SETTING_KEYS.receiptTrashRetentionDays) ?? "30", 10) || 30;
+  const cutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000).toISOString();
+  const toDelete = listReceipts()
+    .filter((r) => r.deletedAt != null && r.deletedAt < cutoff && !r.isAttached)
+    .map((r) => r.id);
+  for (const id of toDelete) removeReceiptById(id);
+  return toDelete.length;
 }
 
 export async function attachReceipt(
@@ -1226,6 +1278,8 @@ export async function createReceipt(
     taxAmount: input.taxAmount,
     rawOcrData: input.rawOcrData,
     isAttached: false,
+    deletedAt: null,
+    deletedById: null,
     createdAt: nowIso(),
   });
 }
@@ -1272,6 +1326,8 @@ export async function createEmailReceipt(input: {
     taxAmount: input.taxAmount,
     rawOcrData: input.rawOcrData,
     isAttached: false,
+    deletedAt: null,
+    deletedById: null,
     createdAt: nowIso(),
   });
 }
@@ -1369,11 +1425,16 @@ export async function getSystemSettings(): Promise<AppSettings> {
   await delay();
   const rateRow = getSetting(SETTING_KEYS.mileageRate);
   const parsedRate = rateRow ? parseFloat(rateRow.value) : NaN;
+  const parsedTrash = parseInt(
+    getSettingValue(SETTING_KEYS.receiptTrashRetentionDays) ?? "30",
+    10
+  );
   return {
     appVersion: getSettingValue(SETTING_KEYS.appVersion) ?? DEFAULT_APP_VERSION,
     announcementMessage: getSettingValue(SETTING_KEYS.announcement) ?? "",
     mileageRate: isFinite(parsedRate) && parsedRate > 0 ? parsedRate : MILEAGE_RATE,
     mileageRateUpdatedAt: rateRow?.updatedAt ?? null,
+    receiptTrashRetentionDays: isFinite(parsedTrash) && parsedTrash > 0 ? parsedTrash : DEFAULT_RECEIPT_TRASH_RETENTION_DAYS,
   };
 }
 

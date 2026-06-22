@@ -1261,6 +1261,8 @@ export function SystemTab() {
   const [messageDraft, setMessageDraft] = React.useState("");
   const [rateDraft, setRateDraft] = React.useState("");
   const [rateError, setRateError] = React.useState("");
+  const [trashDraft, setTrashDraft] = React.useState("");
+  const [trashError, setTrashError] = React.useState("");
   // Seed the local drafts from the fetched settings once they arrive.
   const seededRef = React.useRef(false);
   React.useEffect(() => {
@@ -1269,6 +1271,7 @@ export function SystemTab() {
       setVersionDraft(current.appVersion);
       setMessageDraft(current.announcementMessage);
       setRateDraft(String(current.mileageRate));
+      setTrashDraft(String(current.receiptTrashRetentionDays));
     }
   }, [current]);
 
@@ -1318,6 +1321,16 @@ export function SystemTab() {
     onError,
   });
 
+  const saveTrash = useMutation({
+    mutationFn: () =>
+      updateSystemSetting(SETTING_KEYS.receiptTrashRetentionDays, trashDraft.trim()),
+    onSuccess: () => {
+      invalidate();
+      toast.success("Trash retention updated");
+    },
+    onError,
+  });
+
   function validateRate(raw: string): string {
     const n = parseFloat(raw);
     if (!raw.trim() || isNaN(n)) return "Enter a number (e.g. 0.725)";
@@ -1329,6 +1342,19 @@ export function SystemTab() {
   function handleRateChange(v: string) {
     setRateDraft(v);
     setRateError(validateRate(v));
+  }
+
+  function validateTrashDays(raw: string): string {
+    const n = parseInt(raw.trim(), 10);
+    if (!raw.trim() || isNaN(n)) return "Enter a whole number";
+    if (n < 1) return "Must be at least 1 day";
+    if (n > 365) return "Cannot exceed 365 days";
+    return "";
+  }
+
+  function handleTrashChange(v: string) {
+    setTrashDraft(v);
+    setTrashError(validateTrashDays(v));
   }
 
   if (!current) {
@@ -1442,6 +1468,45 @@ export function SystemTab() {
               Effective {new Date(current.mileageRateUpdatedAt).toLocaleDateString()}
             </span>
           )}
+        </div>
+      </section>
+
+      {/* Receipt Trash Retention */}
+      <section className="flex flex-col gap-3 rounded-xl border border-border p-4">
+        <div>
+          <h3 className="text-sm font-semibold">Receipt Trash Retention</h3>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            How many days trashed receipts are kept before automatic permanent
+            deletion. Applies to new trash actions going forward (1–365 days).
+          </p>
+        </div>
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+            Retention (days)
+            <Input
+              type="number"
+              step="1"
+              min="1"
+              max="365"
+              value={trashDraft}
+              onChange={(e) => handleTrashChange(e.target.value)}
+              className="w-28"
+              placeholder="30"
+            />
+            {trashError && (
+              <span className="text-xs text-destructive">{trashError}</span>
+            )}
+          </label>
+          <Button
+            onClick={() => {
+              const err = validateTrashDays(trashDraft);
+              if (err) { setTrashError(err); return; }
+              saveTrash.mutate();
+            }}
+            disabled={saveTrash.isPending || !!trashError || !trashDraft.trim()}
+          >
+            Save
+          </Button>
         </div>
       </section>
 

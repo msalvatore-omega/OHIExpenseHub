@@ -15,10 +15,14 @@ export const SETTING_KEYS = {
   announcement: "announcementMessage",
   analyticsRetentionDays: "analyticsRetentionDays",
   mileageRate: "mileageRate",
+  receiptTrashRetentionDays: "receiptTrashRetentionDays",
 } as const;
 
 /** Default analytics data retention in days (1 year). */
 export const DEFAULT_ANALYTICS_RETENTION_DAYS = 365;
+
+/** Default receipt trash retention in days before auto-purge. */
+export const DEFAULT_RECEIPT_TRASH_RETENTION_DAYS = 30;
 
 /** Cookie name used by middleware to identify the current user. */
 export const SESSION_COOKIE = "ohi-user-id";

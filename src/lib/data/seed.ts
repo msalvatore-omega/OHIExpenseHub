@@ -5,6 +5,7 @@
 import {
   DEFAULT_ANALYTICS_RETENTION_DAYS,
   DEFAULT_APP_VERSION,
+  DEFAULT_RECEIPT_TRASH_RETENTION_DAYS,
   MILEAGE_RATE,
   SETTING_KEYS,
 } from "@/lib/constants";
@@ -262,6 +263,7 @@ export function buildSystemSettings(): SystemSetting[] {
       updatedAt,
     },
     { id: "setting-mileage-rate", key: SETTING_KEYS.mileageRate, value: String(MILEAGE_RATE), updatedAt },
+    { id: "setting-trash-retention", key: SETTING_KEYS.receiptTrashRetentionDays, value: String(DEFAULT_RECEIPT_TRASH_RETENTION_DAYS), updatedAt },
   ];
 }
 

@@ -108,6 +108,17 @@ export function getDb(): Database {
   for (const r of db.receipts) {
     if (r.uploadedById === undefined) r.uploadedById = r.userId;
     if (r.source === undefined) r.source = "UPLOAD";
+    if (r.deletedAt === undefined) r.deletedAt = null;
+    if (r.deletedById === undefined) r.deletedById = null;
+  }
+  // Add trash retention setting if missing from older persisted data.
+  if (!db.systemSettings.some((s) => s.key === "receiptTrashRetentionDays")) {
+    db.systemSettings.push({
+      id: "setting-trash-retention",
+      key: "receiptTrashRetentionDays",
+      value: "30",
+      updatedAt: new Date().toISOString(),
+    });
   }
   // Migrate IN_REVIEW reports that are actually parked at a group step.
   for (const r of db.reports) {
@@ -372,6 +383,15 @@ export function patchReceipt(
   Object.assign(receipt, patch);
   persist();
   return receipt;
+}
+
+export function removeReceiptById(id: string): boolean {
+  const data = getDb();
+  const before = data.receipts.length;
+  data.receipts = data.receipts.filter((r) => r.id !== id);
+  const removed = data.receipts.length < before;
+  if (removed) persist();
+  return removed;
 }
 
 // ---- Approval history ----

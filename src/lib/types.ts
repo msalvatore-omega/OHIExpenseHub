@@ -174,6 +174,10 @@ export interface Receipt {
   rawOcrData?: unknown;
   isAttached: boolean;
   createdAt: string;
+  /** Soft-delete timestamp. NULL = live; set = in trash. */
+  deletedAt: string | null;
+  /** Who moved the receipt to trash. */
+  deletedById: string | null;
 }
 
 export interface ApprovalHistory {
@@ -210,6 +214,7 @@ export interface AppSettings {
   announcementMessage: string;
   mileageRate: number;
   mileageRateUpdatedAt: string | null;
+  receiptTrashRetentionDays: number;
 }
 
 /**
@@ -286,6 +291,8 @@ export interface ReportFilter {
 export interface ReceiptFilter {
   userId?: string;
   isAttached?: boolean;
+  /** When true, return only soft-deleted receipts; when false/absent return only live ones. */
+  trashed?: boolean;
 }
 
 export interface CreateDraftInput {
