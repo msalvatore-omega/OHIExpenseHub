@@ -1,0 +1,14 @@
+{
+  "projectId": "14124ebc-a76f-4e71-b3c4-7d0702a3db9e",
+  "shape": "package",
+  "pkg": "ohi-expense-hub",
+  "globalName": "OHIExpenseHub",
+  "srcDir": "C:/Users/MSALVATORE/OneDrive - Omega Healthcare Investors, Inc/Projects/OHI Expense Hub/Claude Developed - Prototype/ohi-expense-hub/src/components/ui",
+  "tsconfig": "tsconfig.json",
+  "buildCmd": "npm run build",
+  "cssEntry": "compiled.css",
+  "readmeHeader": ".design-sync/conventions.md",
+  "componentSrcMap": {
+    "Toaster": null
+  }
+}
