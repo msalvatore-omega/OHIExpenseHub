@@ -8,6 +8,7 @@
 
 import * as React from "react";
 
+import { SESSION_COOKIE } from "@/lib/constants";
 import { createSeedData } from "@/lib/data/seed";
 import type { User, UserRole } from "@/lib/types";
 
@@ -36,6 +37,11 @@ export function MockSessionProvider({
   children: React.ReactNode;
 }) {
   const [user, setUser] = React.useState<User>(DEFAULT_USER);
+
+  // Keep the session cookie in sync so Next.js middleware can identify visits.
+  React.useEffect(() => {
+    document.cookie = `${SESSION_COOKIE}=${user.id}; path=/; SameSite=Lax`;
+  }, [user.id]);
 
   const setRole = React.useCallback((role: UserRole) => {
     setUser(firstUserWithRole(role));

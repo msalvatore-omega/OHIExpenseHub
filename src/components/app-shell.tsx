@@ -13,6 +13,7 @@ import {
   LogOut,
   PanelLeft,
   PanelLeftClose,
+  QrCode,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -23,6 +24,7 @@ import { visibleNavItems, type NavItem } from "@/lib/nav";
 import { AnnouncementBanner } from "@/components/announcement-banner";
 import { BrandLogo } from "@/components/brand-logo";
 import { Breadcrumbs } from "@/components/breadcrumbs";
+import { QrCodeDialog } from "@/components/qr-code-dialog";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -91,6 +93,7 @@ function DesktopSidebar({ items }: { items: NavItem[] }) {
   const settings = useSystemSettings();
   const appVersion = settings.data?.appVersion;
   const [collapsed, setCollapsed] = React.useState(false);
+  const [qrOpen, setQrOpen] = React.useState(false);
 
   React.useEffect(() => {
     try {
@@ -216,6 +219,19 @@ function DesktopSidebar({ items }: { items: NavItem[] }) {
           )}
         </div>
         <ThemeToggle collapsed={collapsed} />
+        <button
+          type="button"
+          onClick={() => setQrOpen(true)}
+          aria-label="Open on phone"
+          title={collapsed ? "Open on phone" : "Open on phone"}
+          className={cn(
+            "flex items-center rounded-md py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-sidebar-accent/60 hover:text-foreground",
+            collapsed ? "w-full justify-center px-0" : "w-full justify-start gap-3 px-3"
+          )}
+        >
+          <QrCode className="size-4 shrink-0" />
+          {!collapsed && <span>Open on phone</span>}
+        </button>
         <Button
           variant="ghost"
           onClick={() => router.push("/login")}
@@ -240,6 +256,7 @@ function DesktopSidebar({ items }: { items: NavItem[] }) {
           </p>
         )}
       </div>
+      <QrCodeDialog open={qrOpen} onOpenChange={setQrOpen} />
     </aside>
   );
 }

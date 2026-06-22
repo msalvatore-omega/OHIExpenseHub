@@ -8,7 +8,7 @@ export default function AdminSystemPage() {
         <header>
           <h1>Admin — System</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            App version and announcement banner settings.
+            App version, mileage rate, and announcement banner settings.
           </p>
         </header>
         <SystemTab />

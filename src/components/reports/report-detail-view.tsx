@@ -6,7 +6,7 @@
 
 import * as React from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, Clock, Pencil, XCircle } from "lucide-react";
+import { CheckCircle2, Clock, History, Pencil, XCircle } from "lucide-react";
 import { toast } from "sonner";
 
 import { cn } from "@/lib/utils";
@@ -16,9 +16,10 @@ import {
   getExpenseTypes,
   getReceipts,
   getReport,
+  getReportChangeLogs,
   getUsers,
 } from "@/lib/data";
-import type { ApprovalAction, ExpenseType, Receipt } from "@/lib/types";
+import type { ApprovalAction, ExpenseType, Receipt, ReportChangeLog } from "@/lib/types";
 import { StatusPill } from "@/components/status-pill";
 import { ChangeHistoryButton } from "@/components/reports/report-change-history";
 import { Button } from "@/components/ui/button";
@@ -105,6 +106,10 @@ export function ReportDetailView({
     queryKey: ["approval-groups"],
     queryFn: getApprovalGroups,
   });
+  const changeLogsQuery = useQuery({
+    queryKey: ["report-change-log", reportId],
+    queryFn: () => getReportChangeLogs(reportId),
+  });
 
   const queryClient = useQueryClient();
   const [lightbox, setLightbox] = React.useState<Receipt | null>(null);
@@ -147,6 +152,27 @@ export function ReportDetailView({
   const typeName = new Map(allTypes.map((t) => [t.id, t.displayName]));
   const otherTypeId = allTypes.find((t) => !t.isMileage && t.displayName === "Other")?.id;
   const receiptById = new Map((receiptsQuery.data ?? []).map((r) => [r.id, r]));
+
+  // Map each reclassified line-item ID to its matching change-log entry so the
+  // UI can show the old type name and the reason in the History icon tooltip.
+  const reclassifyLogByItemId = React.useMemo(() => {
+    const logs = changeLogsQuery.data ?? [];
+    const reclass = logs.filter(
+      (c) => c.changeType === "FIELD" && c.field === "expenseTypeId"
+    );
+    return new Map<string, ReportChangeLog>(
+      (reportQuery.data?.lineItems ?? [])
+        .filter((li) => li.reclassifiedAt && li.reclassifiedById)
+        .map((li) => {
+          const match =
+            reclass.find(
+              (c) => c.changedAt === li.reclassifiedAt && c.changedById === li.reclassifiedById
+            ) ?? reclass.find((c) => c.changedById === li.reclassifiedById);
+          return match ? ([li.id, match] as [string, ReportChangeLog]) : null;
+        })
+        .filter((e): e is [string, ReportChangeLog] => e !== null)
+    );
+  }, [changeLogsQuery.data, reportQuery.data?.lineItems]);
 
   if (reportQuery.isLoading) {
     return (
@@ -257,14 +283,27 @@ export function ReportDetailView({
                         ) : (
                           <span className="inline-flex items-center gap-1.5">
                             {displayTypeName}
-                            {li.reclassifiedAt && (
-                              <span
-                                className="inline-flex shrink-0 text-muted-foreground"
-                                title={`Reclassified by accounting on ${formatDateTime(li.reclassifiedAt)}`}
-                              >
-                                <Pencil className="size-3" />
-                              </span>
-                            )}
+                            {li.reclassifiedAt && (() => {
+                              const log = reclassifyLogByItemId.get(li.id);
+                              const who = li.reclassifiedById ? (nameById.get(li.reclassifiedById) ?? "Accounting") : "Accounting";
+                              const when = formatDate(li.reclassifiedAt);
+                              const was = log?.oldValue ? `was: ${log.oldValue}` : "";
+                              const reason = log?.note ? `Reason: ${log.note}` : "";
+                              const tooltip = [
+                                `Reclassified by ${who} on ${when}`,
+                                was,
+                                reason,
+                              ].filter(Boolean).join(" — ");
+                              return (
+                                <span
+                                  className="inline-flex shrink-0 cursor-help text-amber-600 dark:text-amber-400"
+                                  title={tooltip}
+                                  aria-label={tooltip}
+                                >
+                                  <History className="size-3" />
+                                </span>
+                              );
+                            })()}
                             {onReclassify && !editingId && (
                               <button
                                 type="button"

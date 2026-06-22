@@ -208,6 +208,8 @@ export interface SystemSetting {
 export interface AppSettings {
   appVersion: string;
   announcementMessage: string;
+  mileageRate: number;
+  mileageRateUpdatedAt: string | null;
 }
 
 /**
@@ -445,4 +447,65 @@ export interface ApprovalChainStepDisplay {
 export interface ApprovalChainInfoResult {
   steps: ApprovalChainStepDisplay[];
   fastTracked: boolean;
+}
+
+// ---- User activity / analytics ----
+
+export interface UserActivity {
+  id: string;
+  userId?: string;
+  path: string;
+  method: string;
+  statusCode?: number;
+  durationMs?: number;
+  userAgent?: string;
+  browser?: string;
+  os?: string;
+  deviceType?: string;
+  ipAddress?: string;
+  referer?: string;
+  createdAt: string;
+}
+
+export interface ActivityFilter {
+  from?: string;
+  to?: string;
+  userIds?: string[];
+  roles?: UserRole[];
+  departments?: string[];
+  page?: number;
+  pageSize?: number;
+  path?: string;
+}
+
+export interface ActivityKpis {
+  totalVisits: number;
+  uniqueUsers: number;
+  avgVisitsPerUser: number;
+  mostVisitedPage: string;
+}
+
+export interface TimeSeriesPoint {
+  date: string;
+  count: number;
+}
+
+export interface NamedCount {
+  name: string;
+  count: number;
+  id?: string;
+}
+
+export interface ActivityAnalyticsResult {
+  kpis: ActivityKpis;
+  visitsByDay: TimeSeriesPoint[];
+  topPages: NamedCount[];
+  topUsers: NamedCount[];
+  byBrowser: NamedCount[];
+  byOs: NamedCount[];
+  byDevice: NamedCount[];
+  byHour: { hour: number; count: number }[];
+  byRole: NamedCount[];
+  total: number;
+  rows: (UserActivity & { userName?: string; userRole?: string; userDept?: string })[];
 }

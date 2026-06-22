@@ -3,7 +3,7 @@
 export const APP_NAME = "OHI Expense Hub";
 export const APP_SHORT_NAME = "OHI Expense";
 
-/** IRS-style mileage reimbursement rate (USD per mile). */
+/** Fallback mileage reimbursement rate (USD per mile) when no SystemSettings row exists. */
 export const MILEAGE_RATE = 0.725;
 
 /** localStorage key for the persisted mock database. */
@@ -13,7 +13,15 @@ export const STORAGE_KEY = "ohi-prototype-data";
 export const SETTING_KEYS = {
   appVersion: "appVersion",
   announcement: "announcementMessage",
+  analyticsRetentionDays: "analyticsRetentionDays",
+  mileageRate: "mileageRate",
 } as const;
+
+/** Default analytics data retention in days (1 year). */
+export const DEFAULT_ANALYTICS_RETENTION_DAYS = 365;
+
+/** Cookie name used by middleware to identify the current user. */
+export const SESSION_COOKIE = "ohi-user-id";
 
 /** Fallback app version when the SystemSettings row is missing. */
 export const DEFAULT_APP_VERSION = "1.0.0";

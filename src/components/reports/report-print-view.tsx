@@ -9,14 +9,15 @@ import { useQuery } from "@tanstack/react-query";
 import { Printer, X } from "lucide-react";
 
 import { APP_NAME } from "@/lib/constants";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrency, formatDate, formatDateTime } from "@/lib/format";
 import {
   getExpenseTypes,
   getReceipts,
   getReport,
+  getReportChangeLogs,
   getUsers,
 } from "@/lib/data";
-import type { ExpenseLineItem } from "@/lib/types";
+import type { ExpenseLineItem, ReportChangeLog } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { BrandLogo } from "@/components/brand-logo";
 import { ReceiptThumb } from "@/components/reports/receipt-thumb";
@@ -54,6 +55,10 @@ export function ReportPrintView({ reportId }: { reportId: string }) {
     queryKey: ["all-receipts"],
     queryFn: () => getReceipts(),
   });
+  const changeLogsQuery = useQuery({
+    queryKey: ["report-change-log", reportId],
+    queryFn: () => getReportChangeLogs(reportId),
+  });
 
   const ready =
     reportQuery.data &&
@@ -72,6 +77,24 @@ export function ReportPrintView({ reportId }: { reportId: string }) {
   const typeById = new Map(typesQuery.data!.map((t) => [t.id, t]));
   const receiptById = new Map(receiptsQuery.data!.map((r) => [r.id, r]));
   const name = (id?: string) => (id && nameById.get(id)) || "—";
+
+  // Build a map from line-item ID to its reclassification change-log entry.
+  const reclassifyLogByItemId = (() => {
+    const logs = changeLogsQuery.data ?? [];
+    const reclass = logs.filter(
+      (c) => c.changeType === "FIELD" && c.field === "expenseTypeId"
+    );
+    const map = new Map<string, ReportChangeLog>();
+    for (const li of report.lineItems) {
+      if (!li.reclassifiedAt || !li.reclassifiedById) continue;
+      const match =
+        reclass.find(
+          (c) => c.changedAt === li.reclassifiedAt && c.changedById === li.reclassifiedById
+        ) ?? reclass.find((c) => c.changedById === li.reclassifiedById);
+      if (match) map.set(li.id, match);
+    }
+    return map;
+  })();
 
   const ownerId = report.onBehalfOfId ?? report.submitterId;
   const exportDate = new Date();
@@ -210,21 +233,40 @@ export function ReportPrintView({ reportId }: { reportId: string }) {
                     const typeName = isOtherType && li.otherDescription
                       ? `Other — ${li.otherDescription}`
                       : baseTypeName;
+                    const reclassLog = reclassifyLogByItemId.get(li.id);
                     return (
-                      <tr key={li.id} className="border-b border-border align-top">
-                        <td className="px-2 py-1.5">{rowNum}</td>
-                        <td className="px-2 py-1.5 whitespace-nowrap">
-                          {formatDate(li.expenseDate)}
-                        </td>
-                        <td className="px-2 py-1.5">{typeName}</td>
-                        <td className="px-2 py-1.5">{glCode}</td>
-                        <td className="px-2 py-1.5">{glName}</td>
-                        <td className="px-2 py-1.5">{li.description}</td>
-                        <td className="px-2 py-1.5">{location(li)}</td>
-                        <td className="px-2 py-1.5 text-right tabular-nums">
-                          {formatCurrency(li.amount)}
-                        </td>
-                      </tr>
+                      <React.Fragment key={li.id}>
+                        <tr className="border-b border-border align-top">
+                          <td className="px-2 py-1.5">{rowNum}</td>
+                          <td className="px-2 py-1.5 whitespace-nowrap">
+                            {formatDate(li.expenseDate)}
+                          </td>
+                          <td className="px-2 py-1.5">{typeName}</td>
+                          <td className="px-2 py-1.5">{glCode}</td>
+                          <td className="px-2 py-1.5">{glName}</td>
+                          <td className="px-2 py-1.5">{li.description}</td>
+                          <td className="px-2 py-1.5">{location(li)}</td>
+                          <td className="px-2 py-1.5 text-right tabular-nums">
+                            {formatCurrency(li.amount)}
+                          </td>
+                        </tr>
+                        {reclassLog && (
+                          <tr className="border-b border-border">
+                            {/* empty # and date cells to align with Description */}
+                            <td className="px-2 pb-1.5" />
+                            <td className="px-2 pb-1.5" />
+                            <td className="px-2 pb-1.5" />
+                            <td className="px-2 pb-1.5" />
+                            <td className="px-2 pb-1.5" />
+                            <td colSpan={3} className="px-2 pb-1.5 text-[10px] italic text-muted-foreground">
+                              Reclassified by {name(reclassLog.changedById)} on{" "}
+                              {formatDateTime(reclassLog.changedAt)}
+                              {reclassLog.oldValue ? ` from ${reclassLog.oldValue}` : ""}.
+                              {reclassLog.note ? ` Reason: ${reclassLog.note}.` : ""}
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
                     );
                   })}
                   <tr className="border-b border-border bg-muted/30">

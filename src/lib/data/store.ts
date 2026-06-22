@@ -3,7 +3,7 @@
 // localStorage is guarded for SSR safety — on the server the store falls back
 // to a fresh in-memory seed and never touches window.
 
-import { STORAGE_KEY } from "@/lib/constants";
+import { SETTING_KEYS, STORAGE_KEY } from "@/lib/constants";
 import {
   buildApprovalGroupMembers,
   buildApprovalGroups,
@@ -25,6 +25,7 @@ import type {
   ReportChangeLog,
   SystemSetting,
   User,
+  UserActivity,
 } from "@/lib/types";
 
 let db: Database | null = null;
@@ -73,6 +74,20 @@ export function getDb(): Database {
     const otherType = full.find((t) => t.id === "etype-other");
     if (otherType) db.expenseTypes.push(otherType);
   }
+  // Add analytics retention setting if missing.
+  if (!db.systemSettings.some((s) => s.key === "analyticsRetentionDays")) {
+    const full = buildSystemSettings();
+    const retSetting = full.find((s) => s.key === "analyticsRetentionDays");
+    if (retSetting) db.systemSettings.push(retSetting);
+  }
+  // Add mileage rate setting if missing from older persisted data.
+  if (!db.systemSettings.some((s) => s.key === SETTING_KEYS.mileageRate)) {
+    const full = buildSystemSettings();
+    const rateSetting = full.find((s) => s.key === SETTING_KEYS.mileageRate);
+    if (rateSetting) db.systemSettings.push(rateSetting);
+  }
+  // Add userActivities collection if missing from older persisted data.
+  if (!db.userActivities) db.userActivities = [];
   if (!db.approvalGroups) db.approvalGroups = buildApprovalGroups();
   if (!db.approvalGroupMembers)
     db.approvalGroupMembers = buildApprovalGroupMembers();
@@ -460,11 +475,38 @@ export function listSystemSettings(): SystemSetting[] {
   return getDb().systemSettings;
 }
 
+export function getSetting(key: string): SystemSetting | undefined {
+  return getDb().systemSettings.find((s) => s.key === key);
+}
+
 export function getSettingValue(key: string): string | undefined {
   return getDb().systemSettings.find((s) => s.key === key)?.value;
 }
 
 /** Upsert a setting row by key, stamping updatedAt. */
+// ---- User activities ----
+
+export function listUserActivities(): UserActivity[] {
+  return getDb().userActivities;
+}
+
+export function insertUserActivity(activity: UserActivity): UserActivity {
+  getDb().userActivities.push(activity);
+  persist();
+  return activity;
+}
+
+export function pruneUserActivities(olderThanIso: string): number {
+  const data = getDb();
+  const before = data.userActivities.length;
+  data.userActivities = data.userActivities.filter(
+    (a) => a.createdAt >= olderThanIso
+  );
+  const pruned = before - data.userActivities.length;
+  if (pruned > 0) persist();
+  return pruned;
+}
+
 export function upsertSetting(key: string, value: string): SystemSetting {
   const data = getDb();
   const existing = data.systemSettings.find((s) => s.key === key);

@@ -10,6 +10,7 @@ import {
   clearWorkflowHistory,
   findReceipt,
   findReport,
+  getSetting,
   getSettingValue,
   insertApprovalGroupMember,
   insertApprovalHistory,
@@ -45,6 +46,8 @@ import {
   removeReport,
   removeUser,
   replaceLineItemsForReport,
+  listUserActivities,
+  pruneUserActivities,
   upsertSetting,
   userHasRelations,
 } from "@/lib/data/store";
@@ -56,6 +59,8 @@ import {
 import { formatDate } from "@/lib/format";
 import type {
   AccountingReportRow,
+  ActivityAnalyticsResult,
+  ActivityFilter,
   AnalyticsFilter,
   AppSettings,
   ApprovalActionResult,
@@ -636,6 +641,23 @@ export async function deleteReport(
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
+// 5-minute server-side cache for the mileage rate to avoid reading the DB
+// on every line-item save. Stale after the TTL; next save re-reads.
+let _mileageRateCache: { rate: number; at: number } | null = null;
+const RATE_CACHE_TTL = 5 * 60 * 1000;
+
+function liveMileageRate(): number {
+  const now = Date.now();
+  if (_mileageRateCache && now - _mileageRateCache.at < RATE_CACHE_TTL) {
+    return _mileageRateCache.rate;
+  }
+  const raw = getSettingValue(SETTING_KEYS.mileageRate);
+  const parsed = raw ? parseFloat(raw) : NaN;
+  const rate = isFinite(parsed) && parsed > 0 ? parsed : MILEAGE_RATE;
+  _mileageRateCache = { rate, at: now };
+  return rate;
+}
+
 /**
  * Replace a report's line items wholesale, normalizing mileage rows
  * (amount = miles * rate) and recomputing the report total.
@@ -661,7 +683,7 @@ export async function replaceLineItems(
     const isMileage = mileageTypeIds.has(it.expenseTypeId);
     const miles = isMileage ? it.miles : undefined;
     const calculatedAmount =
-      isMileage && miles != null ? round2(miles * MILEAGE_RATE) : undefined;
+      isMileage && miles != null ? round2(miles * liveMileageRate()) : undefined;
     const amount = isMileage ? calculatedAmount ?? 0 : it.amount ?? 0;
     const isOther = it.expenseTypeId === otherTypeId;
     return {
@@ -1346,9 +1368,13 @@ export async function getExpenseTypes(): Promise<ExpenseType[]> {
 /** Resolve the known system settings into a typed view (with fallbacks). */
 export async function getSystemSettings(): Promise<AppSettings> {
   await delay();
+  const rateRow = getSetting(SETTING_KEYS.mileageRate);
+  const parsedRate = rateRow ? parseFloat(rateRow.value) : NaN;
   return {
     appVersion: getSettingValue(SETTING_KEYS.appVersion) ?? DEFAULT_APP_VERSION,
     announcementMessage: getSettingValue(SETTING_KEYS.announcement) ?? "",
+    mileageRate: isFinite(parsedRate) && parsedRate > 0 ? parsedRate : MILEAGE_RATE,
+    mileageRateUpdatedAt: rateRow?.updatedAt ?? null,
   };
 }
 
@@ -1359,6 +1385,8 @@ export async function updateSystemSetting(
 ): Promise<void> {
   await delay();
   upsertSetting(key, value);
+  // Bust the mileage-rate cache so the new value is effective immediately.
+  if (key === SETTING_KEYS.mileageRate) _mileageRateCache = null;
 }
 
 // ---- Accounting / analytics ----
@@ -1829,3 +1857,146 @@ export async function getApprovalChainInfo(
 
 // Re-export approval history type consumers may want alongside the layer.
 export type { ApprovalHistory };
+
+// ---- User activity analytics ----
+
+/** Aggregate user activity data for the analytics dashboard. */
+export async function getActivityAnalytics(
+  filter: ActivityFilter
+): Promise<ActivityAnalyticsResult> {
+  await delay(100, 300);
+
+  const allUsers = listUsers();
+  const userMap = new Map(allUsers.map((u) => [u.id, u]));
+
+  const fromTs = filter.from ? new Date(filter.from + "T00:00:00").getTime() : 0;
+  const toTs = filter.to ? new Date(filter.to + "T23:59:59").getTime() : Infinity;
+
+  // Build allowed user ID set from role/department filters.
+  let allowedUserIds: Set<string> | null = null;
+  if (filter.roles?.length || filter.departments?.length || filter.userIds?.length) {
+    allowedUserIds = new Set<string>();
+    for (const u of allUsers) {
+      const roleOk = !filter.roles?.length || filter.roles.includes(u.role);
+      const deptOk = !filter.departments?.length || filter.departments.includes(u.department);
+      const idOk = !filter.userIds?.length || filter.userIds.includes(u.id);
+      if (roleOk && deptOk && idOk) allowedUserIds.add(u.id);
+    }
+  }
+
+  const pathFilter = filter.path ?? null;
+
+  const activities = listUserActivities().filter((a) => {
+    const ts = new Date(a.createdAt).getTime();
+    if (ts < fromTs || ts > toTs) return false;
+    if (allowedUserIds && (!a.userId || !allowedUserIds.has(a.userId))) return false;
+    if (pathFilter && !a.path.includes(pathFilter)) return false;
+    return true;
+  });
+
+  // KPIs
+  const userVisitCounts = new Map<string, number>();
+  const pageCounts = new Map<string, number>();
+  for (const a of activities) {
+    if (a.userId) userVisitCounts.set(a.userId, (userVisitCounts.get(a.userId) ?? 0) + 1);
+    pageCounts.set(a.path, (pageCounts.get(a.path) ?? 0) + 1);
+  }
+  const uniqueUsers = userVisitCounts.size;
+  const totalVisits = activities.length;
+  const avgVisitsPerUser = uniqueUsers > 0 ? Math.round(totalVisits / uniqueUsers) : 0;
+  const mostVisitedPage = [...pageCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? "—";
+
+  // Visits by day
+  const dayMap = new Map<string, number>();
+  for (const a of activities) {
+    const day = a.createdAt.slice(0, 10);
+    dayMap.set(day, (dayMap.get(day) ?? 0) + 1);
+  }
+  const visitsByDay = [...dayMap.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, count]) => ({ date, count }));
+
+  // Top pages
+  const topPages = [...pageCounts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10)
+    .map(([name, count]) => ({ name, count }));
+
+  // Top users
+  const topUsers = [...userVisitCounts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10)
+    .map(([id, count]) => ({ id, name: userMap.get(id)?.name ?? id, count }));
+
+  // Browser / OS / device aggregations
+  const count = (items: (string | undefined)[]) => {
+    const m = new Map<string, number>();
+    for (const v of items) {
+      const key = v ?? "Unknown";
+      m.set(key, (m.get(key) ?? 0) + 1);
+    }
+    return [...m.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, count]) => ({ name, count }));
+  };
+  const byBrowser = count(activities.map((a) => a.browser ?? "Unknown"));
+  const byOs = count(activities.map((a) => a.os ?? "Unknown"));
+  const byDevice = count(activities.map((a) => a.deviceType ?? "Desktop"));
+
+  // Visits by hour
+  const hourMap = new Map<number, number>();
+  for (const a of activities) {
+    const h = new Date(a.createdAt).getHours();
+    hourMap.set(h, (hourMap.get(h) ?? 0) + 1);
+  }
+  const byHour = Array.from({ length: 24 }, (_, hour) => ({
+    hour,
+    count: hourMap.get(hour) ?? 0,
+  }));
+
+  // Visits by role
+  const roleMap = new Map<string, number>();
+  for (const a of activities) {
+    const role = a.userId ? (userMap.get(a.userId)?.role ?? "Unknown") : "Unknown";
+    roleMap.set(role, (roleMap.get(role) ?? 0) + 1);
+  }
+  const byRole = [...roleMap.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([name, count]) => ({ name, count }));
+
+  // Detail rows (paginated)
+  const page = filter.page ?? 1;
+  const pageSize = filter.pageSize ?? 100;
+  const sorted = [...activities].sort(
+    (a, b) => b.createdAt.localeCompare(a.createdAt)
+  );
+  const rows = sorted.slice((page - 1) * pageSize, page * pageSize).map((a) => {
+    const u = a.userId ? userMap.get(a.userId) : undefined;
+    return { ...a, userName: u?.name, userRole: u?.role, userDept: u?.department };
+  });
+
+  return {
+    kpis: { totalVisits, uniqueUsers, avgVisitsPerUser, mostVisitedPage },
+    visitsByDay,
+    topPages,
+    topUsers,
+    byBrowser,
+    byOs,
+    byDevice,
+    byHour,
+    byRole,
+    total: sorted.length,
+    rows,
+  };
+}
+
+/** Delete activity rows older than the configured retention window. */
+export async function purgeOldActivities(): Promise<number> {
+  await delay(50, 100);
+  const retentionDays = parseInt(
+    getSettingValue(SETTING_KEYS.analyticsRetentionDays) ?? "365",
+    10
+  );
+  const cutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000).toISOString();
+  return pruneUserActivities(cutoff);
+}

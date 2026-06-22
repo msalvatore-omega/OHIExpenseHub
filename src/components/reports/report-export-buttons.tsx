@@ -11,8 +11,10 @@ import {
   getExpenseTypes,
   getReceipts,
   getReport,
+  getReportChangeLogs,
   getUsers,
 } from "@/lib/data";
+import type { ReportChangeLog } from "@/lib/types";
 import { exportReportToExcel } from "@/lib/export/excel";
 import { Button } from "@/components/ui/button";
 
@@ -32,6 +34,10 @@ export function ReportExportButtons({ reportId }: { reportId: string }) {
     queryKey: ["all-receipts"],
     queryFn: () => getReceipts(),
   });
+  const changeLogsQuery = useQuery({
+    queryKey: ["report-change-log", reportId],
+    queryFn: () => getReportChangeLogs(reportId),
+  });
 
   const dataReady =
     reportQuery.data &&
@@ -49,11 +55,30 @@ export function ReportExportButtons({ reportId }: { reportId: string }) {
     try {
       // Yield a frame so the spinner paints before the (sync) build.
       await new Promise((r) => setTimeout(r, 30));
+      const report = reportQuery.data!;
+      const usersById = new Map(usersQuery.data!.map((u) => [u.id, u]));
+      const logs = changeLogsQuery.data ?? [];
+      const reclassLogs = logs.filter(
+        (c) => c.changeType === "FIELD" && c.field === "expenseTypeId"
+      );
+      const changeLogsByLineItemId = new Map<string, ReportChangeLog>(
+        report.lineItems
+          .filter((li) => li.reclassifiedAt && li.reclassifiedById)
+          .map((li) => {
+            const match =
+              reclassLogs.find(
+                (c) => c.changedAt === li.reclassifiedAt && c.changedById === li.reclassifiedById
+              ) ?? reclassLogs.find((c) => c.changedById === li.reclassifiedById);
+            return match ? ([li.id, match] as [string, ReportChangeLog]) : null;
+          })
+          .filter((e): e is [string, ReportChangeLog] => e !== null)
+      );
       exportReportToExcel({
-        report: reportQuery.data!,
-        usersById: new Map(usersQuery.data!.map((u) => [u.id, u])),
+        report,
+        usersById,
         typesById: new Map(typesQuery.data!.map((t) => [t.id, t])),
         receiptsById: new Map(receiptsQuery.data!.map((r) => [r.id, r])),
+        changeLogsByLineItemId,
       });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Export failed");

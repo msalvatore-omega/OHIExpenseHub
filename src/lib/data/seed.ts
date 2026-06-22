@@ -3,7 +3,9 @@
 // can mutate it freely and resetDemoData() can start clean.
 
 import {
+  DEFAULT_ANALYTICS_RETENTION_DAYS,
   DEFAULT_APP_VERSION,
+  MILEAGE_RATE,
   SETTING_KEYS,
 } from "@/lib/constants";
 import type {
@@ -19,6 +21,7 @@ import type {
   ReportChangeLog,
   SystemSetting,
   User,
+  UserActivity,
 } from "@/lib/types";
 
 /** Shape of the in-memory mock database. */
@@ -35,6 +38,7 @@ export interface Database {
   systemSettings: SystemSetting[];
   approvalGroups: ApprovalGroup[];
   approvalGroupMembers: ApprovalGroupMember[];
+  userActivities: UserActivity[];
 }
 
 // --- Stable IDs (referenced across collections) ---
@@ -251,6 +255,13 @@ export function buildSystemSettings(): SystemSetting[] {
   return [
     { id: "setting-app-version", key: SETTING_KEYS.appVersion, value: DEFAULT_APP_VERSION, updatedAt },
     { id: "setting-announcement", key: SETTING_KEYS.announcement, value: "", updatedAt },
+    {
+      id: "setting-analytics-retention",
+      key: SETTING_KEYS.analyticsRetentionDays,
+      value: String(DEFAULT_ANALYTICS_RETENTION_DAYS),
+      updatedAt,
+    },
+    { id: "setting-mileage-rate", key: SETTING_KEYS.mileageRate, value: String(MILEAGE_RATE), updatedAt },
   ];
 }
 
@@ -268,6 +279,7 @@ export function createSeedData(): Database {
     systemSettings: buildSystemSettings(),
     approvalGroups: buildApprovalGroups(),
     approvalGroupMembers: buildApprovalGroupMembers(),
+    userActivities: [],
   };
 }
 

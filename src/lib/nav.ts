@@ -3,6 +3,7 @@
 
 import type { LucideIcon } from "lucide-react";
 import {
+  Activity,
   BarChart3,
   Calculator,
   ClipboardCheck,
@@ -74,6 +75,7 @@ export const NAV_ITEMS: NavItem[] = [
       { label: "Expense Types", href: "/admin/expense-types", icon: Tag },
       { label: "Approval Groups", href: "/admin/approval-groups", icon: Network },
       { label: "Expense Reports", href: "/admin/expense-reports", icon: FileText },
+      { label: "User Analytics", href: "/admin/analytics", icon: Activity },
       { label: "System", href: "/admin/system", icon: Settings },
     ],
   },

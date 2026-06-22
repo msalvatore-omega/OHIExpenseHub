@@ -1259,6 +1259,8 @@ export function SystemTab() {
   const [editingVersion, setEditingVersion] = React.useState(false);
   const [versionDraft, setVersionDraft] = React.useState("");
   const [messageDraft, setMessageDraft] = React.useState("");
+  const [rateDraft, setRateDraft] = React.useState("");
+  const [rateError, setRateError] = React.useState("");
   // Seed the local drafts from the fetched settings once they arrive.
   const seededRef = React.useRef(false);
   React.useEffect(() => {
@@ -1266,6 +1268,7 @@ export function SystemTab() {
       seededRef.current = true;
       setVersionDraft(current.appVersion);
       setMessageDraft(current.announcementMessage);
+      setRateDraft(String(current.mileageRate));
     }
   }, [current]);
 
@@ -1304,6 +1307,29 @@ export function SystemTab() {
     },
     onError,
   });
+
+  const saveRate = useMutation({
+    mutationFn: () =>
+      updateSystemSetting(SETTING_KEYS.mileageRate, rateDraft.trim()),
+    onSuccess: () => {
+      invalidate();
+      toast.success("Mileage rate updated");
+    },
+    onError,
+  });
+
+  function validateRate(raw: string): string {
+    const n = parseFloat(raw);
+    if (!raw.trim() || isNaN(n)) return "Enter a number (e.g. 0.725)";
+    if (n <= 0) return "Rate must be greater than zero";
+    if (!/^\d*\.?\d{0,4}$/.test(raw.trim())) return "Up to 4 decimal places";
+    return "";
+  }
+
+  function handleRateChange(v: string) {
+    setRateDraft(v);
+    setRateError(validateRate(v));
+  }
 
   if (!current) {
     return (
@@ -1371,6 +1397,52 @@ export function SystemTab() {
             </Button>
           </div>
         )}
+      </section>
+
+      {/* Mileage Rate */}
+      <section className="flex flex-col gap-3 rounded-xl border border-border p-4">
+        <div>
+          <h3 className="text-sm font-semibold">Mileage Rate</h3>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            USD per mile applied to new mileage line items. Existing line items
+            are not retroactively recalculated.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+            Rate ($ / mile)
+            <div className="flex items-center gap-1.5">
+              <span className="text-sm text-muted-foreground">$</span>
+              <Input
+                type="number"
+                step="0.0001"
+                min="0.0001"
+                value={rateDraft}
+                onChange={(e) => handleRateChange(e.target.value)}
+                className="w-32"
+                placeholder="0.7250"
+              />
+            </div>
+            {rateError && (
+              <span className="text-xs text-destructive">{rateError}</span>
+            )}
+          </label>
+          <Button
+            onClick={() => {
+              const err = validateRate(rateDraft);
+              if (err) { setRateError(err); return; }
+              saveRate.mutate();
+            }}
+            disabled={saveRate.isPending || !!rateError || !rateDraft.trim()}
+          >
+            Save
+          </Button>
+          {current.mileageRateUpdatedAt && (
+            <span className="self-center text-xs text-muted-foreground">
+              Effective {new Date(current.mileageRateUpdatedAt).toLocaleDateString()}
+            </span>
+          )}
+        </div>
       </section>
 
       {/* Announcement Banner */}

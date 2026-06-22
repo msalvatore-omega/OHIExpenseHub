@@ -10,6 +10,7 @@ import type {
   ExpenseType,
   LedgerEntry,
   Receipt,
+  ReportChangeLog,
   ReportDetail,
   User,
 } from "@/lib/types";
@@ -83,6 +84,8 @@ const HEADERS = [
   "Status",
   "Approved By",
   "Approval Date",
+  "Reclassified By",
+  "Reclassify Reason",
 ] as const;
 
 // "Amount" is at index 16 (0-based) in HEADERS.
@@ -95,12 +98,14 @@ export interface ExcelExportContext {
   usersById: Map<string, User>;
   typesById: Map<string, ExpenseType>;
   receiptsById: Map<string, Receipt>;
+  /** Change log entries keyed by line-item ID (most recent reclassification per item). */
+  changeLogsByLineItemId?: Map<string, ReportChangeLog>;
   /** @deprecated GL columns are now always included; this parameter is ignored. */
   includeGlColumns?: boolean;
 }
 
 export function exportReportToExcel(ctx: ExcelExportContext): void {
-  const { report, usersById, typesById, receiptsById } = ctx;
+  const { report, usersById, typesById, receiptsById, changeLogsByLineItemId } = ctx;
 
   const name = (id?: string) => (id && usersById.get(id)?.name) || "";
   const ownerId = report.onBehalfOfId ?? report.submitterId;
@@ -153,6 +158,15 @@ export function exportReportToExcel(ctx: ExcelExportContext): void {
       report.status,
       approvedBy,
       approvalDate,
+      // Reclassification columns — always emitted, blank when not reclassified.
+      (() => {
+        const log = changeLogsByLineItemId?.get(li.id);
+        if (!log) return "";
+        const who = name(log.changedById);
+        const when = log.changedAt.slice(0, 10);
+        return who ? `${who} on ${when}` : when;
+      })(),
+      changeLogsByLineItemId?.get(li.id)?.note ?? "",
     ];
   });
 
