@@ -1415,7 +1415,9 @@ export async function getDelegatedPrincipals(
 
 export async function getExpenseTypes(): Promise<ExpenseType[]> {
   await delay();
-  return [...listExpenseTypes()];
+  return [...listExpenseTypes()].sort((a, b) =>
+    a.displayName.localeCompare(b.displayName, undefined, { sensitivity: "base" })
+  );
 }
 
 // ---- System settings ----
