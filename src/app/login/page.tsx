@@ -1,20 +1,19 @@
 "use client";
 
-// Mock login. Lists all active seed users so you can sign in as any persona.
+// Mock login. Lists all active users so you can sign in as any persona.
 // No real auth — selecting a user sets the mock session and routes into the app.
 
 import { useRouter } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
 
 import { cn } from "@/lib/utils";
 import { APP_NAME } from "@/lib/constants";
-import { createSeedData } from "@/lib/data/seed";
+import { getUsers } from "@/lib/data";
 import type { User, UserRole } from "@/lib/types";
 import { useSession } from "@/lib/auth/mock-session";
 import { clearAnnouncementDismissal } from "@/components/announcement-banner";
 import { BrandLogo } from "@/components/brand-logo";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-
-const SEED_USERS = createSeedData().users.filter((u) => u.isActive);
 
 const ROLE_ORDER: UserRole[] = ["ADMIN", "APPROVER", "ACCOUNTING", "SUBMITTER"];
 const ROLE_LABEL: Record<UserRole, string> = {
@@ -69,10 +68,12 @@ function UserRow({ user, onSelect }: { user: User; onSelect: () => void }) {
 export default function LoginPage() {
   const router = useRouter();
   const { setUser } = useSession();
+  const usersQuery = useQuery({ queryKey: ["users"], queryFn: getUsers });
+  const activeUsers = (usersQuery.data ?? []).filter((u) => u.isActive);
 
   const grouped = ROLE_ORDER.map((role) => ({
     role,
-    users: SEED_USERS.filter((u) => u.role === role),
+    users: activeUsers.filter((u) => u.role === role),
   })).filter((g) => g.users.length > 0);
 
   function handleSelect(user: User) {

@@ -145,7 +145,7 @@ export function UsersTab() {
               <TableHead>Role</TableHead>
               <TableHead>Manager</TableHead>
               <TableHead>Approvers</TableHead>
-              <TableHead className="text-right">Fast-track</TableHead>
+              <TableHead className="text-right">Auto Approval Threshold</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="w-28" />
               <TableHead className="w-14" />
@@ -271,10 +271,10 @@ function StatusIndicator({ active }: { active: boolean }) {
   );
 }
 
-const FAST_TRACK_TOOLTIP =
+const AUTO_APPROVAL_TOOLTIP =
   "If 0, every report goes through the full approver chain. If > 0, reports below this amount skip Approvers #2 and #3 and go straight to Accounting and Executive review.";
 
-/** Fast-track threshold number input with explanatory help text. */
+/** Auto Approval Expense Threshold number input with explanatory help text. */
 function FastTrackField({
   value,
   onChange,
@@ -285,9 +285,9 @@ function FastTrackField({
   return (
     <label
       className="flex flex-col gap-1 text-xs font-medium text-muted-foreground"
-      title={FAST_TRACK_TOOLTIP}
+      title={AUTO_APPROVAL_TOOLTIP}
     >
-      Fast-track threshold ($)
+      Auto Approval Expense Threshold ($)
       <Input
         type="number"
         min="0"
@@ -295,7 +295,7 @@ function FastTrackField({
         value={value}
         onChange={(e) => onChange(e.target.value)}
       />
-      <span className="font-normal">{FAST_TRACK_TOOLTIP}</span>
+      <span className="font-normal">{AUTO_APPROVAL_TOOLTIP}</span>
     </label>
   );
 }
@@ -635,6 +635,8 @@ function EditUserDialog({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const [name, setName] = React.useState<string>("");
+  const [department, setDepartment] = React.useState<string>("");
   const [role, setRole] = React.useState<UserRole>("SUBMITTER");
   const [managerId, setManagerId] = React.useState<string>("");
   const [approver1Id, setApprover1Id] = React.useState<string>("");
@@ -645,6 +647,8 @@ function EditUserDialog({
   React.useEffect(() => {
     if (user) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
+      setName(user.name);
+      setDepartment(user.department);
       setRole(user.role);
       setManagerId(user.managerId ?? "");
       setApprover1Id(user.approver1Id ?? "");
@@ -660,6 +664,8 @@ function EditUserDialog({
   const mutation = useMutation({
     mutationFn: () =>
       updateUser(user!.id, {
+        name: name.trim(),
+        department: department.trim(),
         role,
         managerId: managerId || null,
         approver1Id: approver1Id || null,
@@ -681,6 +687,14 @@ function EditUserDialog({
           <DialogTitle>Edit {user?.name}</DialogTitle>
         </DialogHeader>
         <div className="flex flex-col gap-3">
+          <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+            Name
+            <Input value={name} onChange={(e) => setName(e.target.value)} />
+          </label>
+          <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+            Department
+            <Input value={department} onChange={(e) => setDepartment(e.target.value)} />
+          </label>
           <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
             Role
             <select
@@ -744,7 +758,7 @@ function EditUserDialog({
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button onClick={() => mutation.mutate()} disabled={mutation.isPending}>
+          <Button onClick={() => mutation.mutate()} disabled={mutation.isPending || !name.trim()}>
             Save
           </Button>
         </DialogFooter>

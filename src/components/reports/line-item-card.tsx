@@ -21,7 +21,7 @@ import { AttachReceiptDialog } from "@/components/reports/attach-receipt-dialog"
 import type { ReportFormValues } from "@/components/reports/editor-schema";
 
 const SELECT_CLASS =
-  "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50 aria-invalid:border-destructive";
+  "h-8 w-full rounded-lg border border-input bg-background text-foreground px-2.5 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50 aria-invalid:border-destructive";
 
 const toNumberOrUndefined = (v: unknown) =>
   v === "" || v == null ? undefined : Number(v);
@@ -258,12 +258,12 @@ export function LineItemCard({
               onBlur={() => setTimeout(() => setShowSugg(false), 150)}
             />
             {showSugg && citySuggestions.length > 0 && (
-              <div className="absolute left-0 right-0 top-full z-50 mt-1 overflow-hidden rounded-lg bg-popover text-popover-foreground shadow-md ring-1 ring-foreground/10">
+              <div className="absolute left-0 right-0 top-full z-50 mt-1 overflow-hidden rounded-lg border border-border bg-popover text-popover-foreground shadow-md">
                 {citySuggestions.map((c) => (
                   <button
                     key={c}
                     type="button"
-                    className="flex w-full items-center px-3 py-1.5 text-left text-sm transition-colors hover:bg-accent/30"
+                    className="flex w-full items-center px-3 py-1.5 text-left text-sm transition-colors hover:bg-accent hover:text-accent-foreground"
                     onMouseDown={(e) => {
                       // Prevent blur from firing before click is registered.
                       e.preventDefault();

@@ -2,10 +2,9 @@
 
 // Print-optimised expense report. Lives inside the app shell, but @media print
 // + print:hidden utilities strip all chrome so only this document prints.
-// Opened with ?autoprint=1 (from the Export PDF button) it prints automatically.
 
 import * as React from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { Printer, X } from "lucide-react";
 
@@ -41,8 +40,6 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 
 export function ReportPrintView({ reportId }: { reportId: string }) {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const autoprint = searchParams.get("autoprint") === "1";
 
   const reportQuery = useQuery({
     queryKey: ["report", reportId],
@@ -63,16 +60,6 @@ export function ReportPrintView({ reportId }: { reportId: string }) {
     usersQuery.data &&
     typesQuery.data &&
     receiptsQuery.data;
-
-  // Auto-print once everything is loaded.
-  const printedRef = React.useRef(false);
-  React.useEffect(() => {
-    if (autoprint && ready && !printedRef.current) {
-      printedRef.current = true;
-      const t = setTimeout(() => window.print(), 400);
-      return () => clearTimeout(t);
-    }
-  }, [autoprint, ready]);
 
   if (!ready) {
     return (

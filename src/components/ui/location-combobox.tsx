@@ -15,7 +15,7 @@ import { isDivider, type ComboboxItem, type CountryOption } from "@/lib/location
 
 function triggerCls(hasValue: boolean, className?: string) {
   return cn(
-    "h-8 w-full flex items-center justify-between gap-2 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none transition-colors",
+    "h-8 w-full flex items-center justify-between gap-2 rounded-lg border border-input bg-background text-foreground px-2.5 text-sm outline-none transition-colors",
     "hover:border-ring/60",
     "focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50",
     "disabled:cursor-not-allowed disabled:opacity-50",
@@ -38,8 +38,8 @@ function OptionButton({
     <button
       type="button"
       className={cn(
-        "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent/30 focus-visible:bg-accent/30 focus-visible:outline-none",
-        isSelected && "bg-accent/20 font-medium"
+        "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:text-accent-foreground focus-visible:outline-none",
+        isSelected && "bg-accent text-accent-foreground font-medium"
       )}
       onClick={onClick}
     >
@@ -70,7 +70,7 @@ function ComboboxPopup({
       >
         <PopoverPrimitive.Popup
           className={cn(
-            "w-(--anchor-width) min-w-44 overflow-hidden rounded-lg bg-popover text-popover-foreground shadow-md ring-1 ring-foreground/10",
+            "w-(--anchor-width) min-w-44 overflow-hidden rounded-lg border border-border bg-popover text-popover-foreground shadow-md",
             "origin-(--transform-origin) duration-100 outline-none",
             "data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95",
             "data-closed:animate-out data-closed:overflow-hidden data-closed:fade-out-0 data-closed:zoom-out-95"

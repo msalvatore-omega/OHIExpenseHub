@@ -8,7 +8,7 @@ export default function AdminUsersPage() {
         <header>
           <h1>Admin — Users</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Manage user accounts, roles, approval chains, and fast-track thresholds.
+            Manage user accounts, roles, approval chains, and auto approval thresholds.
           </p>
         </header>
         <UsersTab />

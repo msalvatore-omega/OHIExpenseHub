@@ -556,7 +556,7 @@ function RowActionCells({
           title="Export PDF"
           aria-label="Export PDF"
           onClick={() =>
-            window.open(`/reports/${report.id}/print?autoprint=1`, "_blank")
+            window.open(`/reports/${report.id}/print`, "_blank")
           }
         >
           <FileText className="size-4" />

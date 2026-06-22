@@ -1,6 +1,6 @@
 "use client";
 
-// Export PDF (opens the print view and auto-prints) + Export Excel (SheetJS).
+// Export PDF (opens the print view) + Export Excel (SheetJS).
 
 import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -43,7 +43,7 @@ export function ReportExportButtons({ reportId }: { reportId: string }) {
     receiptsQuery.data;
 
   const handlePdf = () => {
-    window.open(`/reports/${reportId}/print?autoprint=1`, "_blank");
+    window.open(`/reports/${reportId}/print`, "_blank");
   };
 
   const handleExcel = async () => {

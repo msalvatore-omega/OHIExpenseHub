@@ -19,7 +19,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { Loader2, Pencil, Trash2, XCircle } from "lucide-react";
+import { ExternalLink, Loader2, Pencil, Trash2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 
 import { cn } from "@/lib/utils";
@@ -139,7 +139,8 @@ export function KpiSection({ userId }: { userId: string }) {
   });
 
   const approveMutation = useMutation({
-    mutationFn: (id: string) => approveReport(id, userId),
+    mutationFn: ({ id, note }: { id: string; note?: string }) =>
+      approveReport(id, userId, note),
     onSuccess: (result) => {
       invalidate();
       toastQueuedNotifications(result.notifications);
@@ -198,7 +199,7 @@ export function KpiSection({ userId }: { userId: string }) {
         <AwaitingBody
           loading={queue.isLoading}
           rows={awaiting}
-          onApprove={(id) => approveMutation.mutate(id)}
+          onApprove={(id, note) => approveMutation.mutate({ id, note })}
           onReject={(id, note) => rejectMutation.mutate({ id, note })}
           busy={approveMutation.isPending || rejectMutation.isPending}
         />
@@ -436,10 +437,13 @@ function AwaitingBody({
 }: {
   loading: boolean;
   rows: ReportRoutingRow[];
-  onApprove: (id: string) => void;
+  onApprove: (id: string, note?: string) => void;
   onReject: (id: string, note: string) => void;
   busy: boolean;
 }) {
+  const router = useRouter();
+  // Per-report approve note state.
+  const [notes, setNotes] = React.useState<Record<string, string>>({});
   const [rejectingId, setRejectingId] = React.useState<string | null>(null);
   const [rejectNote, setRejectNote] = React.useState("");
 
@@ -462,7 +466,8 @@ function AwaitingBody({
             key={report.id}
             className="flex flex-col gap-2 rounded-lg border border-border p-3"
           >
-            <div className="flex items-center justify-between gap-3">
+            {/* Header row */}
+            <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium">
                   {report.reportName}
@@ -471,14 +476,41 @@ function AwaitingBody({
                   {submitterName} · {formatCurrency(report.totalAmount)}
                 </p>
               </div>
-              <StatusPill status={report.status} />
+              <div className="flex shrink-0 items-center gap-2">
+                <StatusPill status={report.status} />
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+                  onClick={() => router.push(`/approvals/${report.id}`)}
+                  title="View full report"
+                >
+                  <ExternalLink className="size-3.5" />
+                  View
+                </Button>
+              </div>
             </div>
+
+            {/* Note for approval */}
+            <Textarea
+              placeholder="Add a note (optional)…"
+              value={notes[report.id] ?? ""}
+              onChange={(e) =>
+                setNotes((prev) => ({ ...prev, [report.id]: e.target.value }))
+              }
+              rows={2}
+              className="text-xs"
+            />
+
+            {/* Actions */}
             <div className="flex gap-2">
               <Button
                 size="sm"
                 className="flex-1 bg-green-600 text-white hover:bg-green-700"
                 disabled={busy}
-                onClick={() => onApprove(report.id)}
+                onClick={() =>
+                  onApprove(report.id, notes[report.id]?.trim() || undefined)
+                }
               >
                 Approve
               </Button>
@@ -487,7 +519,10 @@ function AwaitingBody({
                 variant="outline"
                 className="flex-1 border-red-300 text-red-600 hover:bg-red-50 hover:text-red-700 dark:border-red-900 dark:hover:bg-red-950"
                 disabled={busy}
-                onClick={() => setRejectingId(report.id)}
+                onClick={() => {
+                  setRejectNote(notes[report.id]?.trim() ?? "");
+                  setRejectingId(report.id);
+                }}
               >
                 Reject
               </Button>
