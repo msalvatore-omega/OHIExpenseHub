@@ -119,10 +119,9 @@ export class ConflictError extends Error {
   }
 }
 
-/** Simulate a short async round-trip without adding noticeable latency. */
-function delay(min = 0, max = 40): Promise<void> {
-  const ms = Math.floor(min + Math.random() * (max - min));
-  return new Promise((resolve) => setTimeout(resolve, ms));
+/** No-op kept so call-sites compile without changes; resolved immediately. */
+function delay(_min = 0, _max = 0): Promise<void> {
+  return Promise.resolve();
 }
 
 function userById(id: string | undefined): User | undefined {

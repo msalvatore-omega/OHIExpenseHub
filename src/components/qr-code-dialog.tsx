@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -124,9 +125,9 @@ export function QrCodeDialog({
             <Copy className="mr-2 size-3.5" />
             Copy link
           </Button>
-          <Button size="sm" onClick={() => onOpenChange(false)}>
+          <DialogClose render={<Button size="sm" />}>
             Close
-          </Button>
+          </DialogClose>
         </DialogFooter>
       </DialogContent>
     </Dialog>

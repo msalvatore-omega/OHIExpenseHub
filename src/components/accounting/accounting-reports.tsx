@@ -48,6 +48,7 @@ import type {
   User,
 } from "@/lib/types";
 import { ChangeHistoryDialog } from "@/components/reports/report-change-history";
+import { PdfViewerDialog } from "@/components/reports/pdf-viewer-dialog";
 import { StatusPill } from "@/components/status-pill";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -525,6 +526,7 @@ function RowActionCells({
   markPaidPending: boolean;
 }) {
   const [excelBusy, setExcelBusy] = React.useState(false);
+  const [pdfOpen, setPdfOpen] = React.useState(false);
 
   const stop = (e: React.MouseEvent) => e.stopPropagation();
 
@@ -549,15 +551,24 @@ function RowActionCells({
 
   return (
     <>
+      <PdfViewerDialog
+        reportId={report.id}
+        open={pdfOpen}
+        onOpenChange={setPdfOpen}
+      />
       <TableCell className="text-center" onClick={stop}>
         <Button
           variant="ghost"
           size="icon-sm"
           title="Export PDF"
           aria-label="Export PDF"
-          onClick={() =>
-            window.open(`/reports/${report.id}/print`, "_blank")
-          }
+          onClick={() => {
+            if (typeof window !== "undefined" && window.innerWidth < 768) {
+              window.open(`/reports/${report.id}/print`, "_blank");
+            } else {
+              setPdfOpen(true);
+            }
+          }}
         >
           <FileText className="size-4" />
         </Button>

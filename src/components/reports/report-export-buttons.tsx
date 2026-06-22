@@ -1,6 +1,6 @@
 "use client";
 
-// Export PDF (opens the print view) + Export Excel (SheetJS).
+// Export PDF (opens the print view in a modal) + Export Excel (SheetJS).
 
 import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -17,9 +17,11 @@ import {
 import type { ReportChangeLog } from "@/lib/types";
 import { exportReportToExcel } from "@/lib/export/excel";
 import { Button } from "@/components/ui/button";
+import { PdfViewerDialog } from "@/components/reports/pdf-viewer-dialog";
 
 export function ReportExportButtons({ reportId }: { reportId: string }) {
   const [generating, setGenerating] = React.useState(false);
+  const [pdfOpen, setPdfOpen] = React.useState(false);
 
   const reportQuery = useQuery({
     queryKey: ["report", reportId],
@@ -46,7 +48,11 @@ export function ReportExportButtons({ reportId }: { reportId: string }) {
     receiptsQuery.data;
 
   const handlePdf = () => {
-    window.open(`/reports/${reportId}/print`, "_blank");
+    if (typeof window !== "undefined" && window.innerWidth < 768) {
+      window.open(`/reports/${reportId}/print`, "_blank");
+    } else {
+      setPdfOpen(true);
+    }
   };
 
   const handleExcel = async () => {
@@ -88,6 +94,12 @@ export function ReportExportButtons({ reportId }: { reportId: string }) {
   };
 
   return (
+    <>
+      <PdfViewerDialog
+        reportId={reportId}
+        open={pdfOpen}
+        onOpenChange={setPdfOpen}
+      />
     <div className="flex items-center gap-2">
       <Button variant="outline" size="sm" onClick={handlePdf}>
         <FileText className="size-4" />
@@ -107,5 +119,6 @@ export function ReportExportButtons({ reportId }: { reportId: string }) {
         Export Excel
       </Button>
     </div>
+    </>
   );
 }

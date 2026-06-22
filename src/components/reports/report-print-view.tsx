@@ -4,7 +4,7 @@
 // + print:hidden utilities strip all chrome so only this document prints.
 
 import * as React from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { Printer, X } from "lucide-react";
 
@@ -41,6 +41,9 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 
 export function ReportPrintView({ reportId }: { reportId: string }) {
   const router = useRouter();
+  // Hide the screen toolbar when rendered inside the PDF viewer iframe.
+  const searchParams = useSearchParams();
+  const inIframe = searchParams.get("iframe") === "1";
 
   const reportQuery = useQuery({
     queryKey: ["report", reportId],
@@ -122,17 +125,19 @@ export function ReportPrintView({ reportId }: { reportId: string }) {
 
   return (
     <div className="mx-auto w-full max-w-3xl bg-white px-6 py-8 text-foreground print:max-w-none print:px-0">
-      {/* Screen-only toolbar */}
-      <div className="mb-6 flex items-center justify-between print:hidden">
-        <Button variant="ghost" size="sm" onClick={() => router.back()}>
-          <X className="size-4" />
-          Close
-        </Button>
-        <Button size="sm" onClick={() => window.print()}>
-          <Printer className="size-4" />
-          Print
-        </Button>
-      </div>
+      {/* Screen-only toolbar — hidden when rendered inside the PDF viewer iframe */}
+      {!inIframe && (
+        <div className="mb-6 flex items-center justify-between print:hidden">
+          <Button variant="ghost" size="sm" onClick={() => router.back()}>
+            <X className="size-4" />
+            Close
+          </Button>
+          <Button size="sm" onClick={() => window.print()}>
+            <Printer className="size-4" />
+            Print
+          </Button>
+        </div>
+      )}
 
       {/* Header + logo */}
       <header className="flex items-center justify-between border-b-2 border-primary pb-4">
