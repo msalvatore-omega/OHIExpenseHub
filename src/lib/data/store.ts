@@ -67,6 +67,12 @@ export function getDb(): Database {
   ) {
     db.expenseTypes = buildExpenseTypes();
   }
+  // Add the "Other" free-text type if missing from stored data.
+  if (!db.expenseTypes.some((t) => t.id === "etype-other")) {
+    const full = buildExpenseTypes();
+    const otherType = full.find((t) => t.id === "etype-other");
+    if (otherType) db.expenseTypes.push(otherType);
+  }
   if (!db.approvalGroups) db.approvalGroups = buildApprovalGroups();
   if (!db.approvalGroupMembers)
     db.approvalGroupMembers = buildApprovalGroupMembers();

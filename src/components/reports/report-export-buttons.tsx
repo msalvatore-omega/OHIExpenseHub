@@ -14,12 +14,9 @@ import {
   getUsers,
 } from "@/lib/data";
 import { exportReportToExcel } from "@/lib/export/excel";
-import { canSeeGlDetails } from "@/lib/expense-type";
-import { useSession } from "@/lib/auth/mock-session";
 import { Button } from "@/components/ui/button";
 
 export function ReportExportButtons({ reportId }: { reportId: string }) {
-  const { role } = useSession();
   const [generating, setGenerating] = React.useState(false);
 
   const reportQuery = useQuery({
@@ -57,7 +54,6 @@ export function ReportExportButtons({ reportId }: { reportId: string }) {
         usersById: new Map(usersQuery.data!.map((u) => [u.id, u])),
         typesById: new Map(typesQuery.data!.map((t) => [t.id, t])),
         receiptsById: new Map(receiptsQuery.data!.map((r) => [r.id, r])),
-        includeGlColumns: canSeeGlDetails(role),
       });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Export failed");

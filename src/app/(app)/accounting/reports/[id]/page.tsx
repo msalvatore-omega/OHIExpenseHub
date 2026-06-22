@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 
-import { ReportDetailView } from "@/components/reports/report-detail-view";
+import { AccountingReportDetail } from "@/components/accounting/accounting-report-detail";
 import { ReportExportButtons } from "@/components/reports/report-export-buttons";
 import { RoleGuard } from "@/components/role-guard";
 
@@ -23,7 +23,7 @@ export default async function AccountingReportDetailPage({
           Back to Reports
         </Link>
       </div>
-      <ReportDetailView
+      <AccountingReportDetail
         reportId={id}
         actions={<ReportExportButtons reportId={id} />}
       />

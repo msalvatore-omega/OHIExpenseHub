@@ -16,6 +16,7 @@ export interface LineItemForm {
   miles?: number;
   amount?: number;
   receiptId?: string;
+  otherDescription?: string;
 }
 
 export interface ReportFormValues {
@@ -26,7 +27,7 @@ export interface ReportFormValues {
   lineItems: LineItemForm[];
 }
 
-export function makeReportSchema(mileageTypeIds: Set<string>) {
+export function makeReportSchema(mileageTypeIds: Set<string>, otherTypeId?: string) {
   const lineItem = z
     .object({
       id: z.string().optional(),
@@ -40,6 +41,7 @@ export function makeReportSchema(mileageTypeIds: Set<string>) {
       miles: z.number().positive("Enter miles").optional(),
       amount: z.number().positive("Enter an amount").optional(),
       receiptId: z.string().optional(),
+      otherDescription: z.string().optional(),
     })
     .superRefine((val, ctx) => {
       if (!val.expenseTypeId) return;
@@ -56,6 +58,13 @@ export function makeReportSchema(mileageTypeIds: Set<string>) {
           code: "custom",
           path: ["amount"],
           message: "Amount required",
+        });
+      }
+      if (otherTypeId && val.expenseTypeId === otherTypeId && !val.otherDescription?.trim()) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["otherDescription"],
+          message: "Required — describe the expense",
         });
       }
     });
@@ -80,4 +89,5 @@ export const EMPTY_LINE_ITEM: LineItemForm = {
   miles: undefined,
   amount: undefined,
   receiptId: undefined,
+  otherDescription: undefined,
 };

@@ -159,9 +159,14 @@ function EditorForm({
     [expenseTypes]
   );
 
+  const otherTypeId = React.useMemo(
+    () => expenseTypes.find((t) => !t.isMileage && t.displayName === "Other")?.id ?? null,
+    [expenseTypes]
+  );
+
   const schema = React.useMemo(
-    () => makeReportSchema(mileageTypeIds),
-    [mileageTypeIds]
+    () => makeReportSchema(mileageTypeIds, otherTypeId ?? undefined),
+    [mileageTypeIds, otherTypeId]
   );
 
   const form = useForm<ReportFormValues>({
@@ -187,6 +192,7 @@ function EditorForm({
             ? undefined
             : li.amount,
           receiptId: li.receiptId,
+          otherDescription: li.otherDescription,
         })
       ),
     },
@@ -234,6 +240,7 @@ function EditorForm({
     amount: li.amount,
     miles: li.miles,
     receiptId: li.receiptId,
+    otherDescription: li.otherDescription,
   });
 
   const persist = React.useCallback(
@@ -429,6 +436,7 @@ function EditorForm({
               index={index}
               expenseTypes={expenseTypes}
               mileageTypeIds={mileageTypeIds}
+              otherTypeId={otherTypeId}
               receiptsById={receiptsById}
               unattachedReceipts={unattachedReceipts}
               canRemove={fields.length > 1}

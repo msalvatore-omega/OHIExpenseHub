@@ -5,11 +5,12 @@
 // the accounting read-only view so both render an identical report.
 
 import * as React from "react";
-import { useQuery } from "@tanstack/react-query";
-import { CheckCircle2, Clock, XCircle } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { CheckCircle2, Clock, Pencil, XCircle } from "lucide-react";
+import { toast } from "sonner";
 
 import { cn } from "@/lib/utils";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrency, formatDate, formatDateTime } from "@/lib/format";
 import {
   getApprovalGroups,
   getExpenseTypes,
@@ -17,15 +18,17 @@ import {
   getReport,
   getUsers,
 } from "@/lib/data";
-import type { ApprovalAction, Receipt } from "@/lib/types";
+import type { ApprovalAction, ExpenseType, Receipt } from "@/lib/types";
 import { StatusPill } from "@/components/status-pill";
 import { ChangeHistoryButton } from "@/components/reports/report-change-history";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -36,6 +39,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ReceiptThumb } from "@/components/reports/receipt-thumb";
+
+const SELECT_CLASS =
+  "h-8 w-full min-w-[10rem] rounded-lg border border-input bg-background text-foreground px-2.5 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
 
 function HeaderField({ label, value }: { label: string; value: string }) {
   return (
@@ -65,6 +71,7 @@ export function ReportDetailView({
   midContent,
   footer,
   reserveBottomSpace = false,
+  onReclassify,
 }: {
   reportId: string;
   /** Right-aligned header slot (e.g. export buttons). */
@@ -75,6 +82,11 @@ export function ReportDetailView({
   footer?: React.ReactNode;
   /** Adds extra bottom padding so a fixed footer doesn't cover content. */
   reserveBottomSpace?: boolean;
+  /**
+   * When provided (accounting/admin views only), renders inline expense-type
+   * reclassification UI on each line item row.
+   */
+  onReclassify?: (lineItemId: string, newTypeId: string, reason: string) => Promise<void>;
 }) {
   const reportQuery = useQuery({
     queryKey: ["report", reportId],
@@ -94,15 +106,46 @@ export function ReportDetailView({
     queryFn: getApprovalGroups,
   });
 
+  const queryClient = useQueryClient();
   const [lightbox, setLightbox] = React.useState<Receipt | null>(null);
+
+  // ---- reclassify inline edit state ----
+  const [editingId, setEditingId] = React.useState<string | null>(null);
+  const [draftTypeId, setDraftTypeId] = React.useState("");
+  const [draftReason, setDraftReason] = React.useState("");
+  const [reclassifySaving, setReclassifySaving] = React.useState(false);
+
+  const startEdit = (lineItemId: string, currentTypeId: string) => {
+    setEditingId(lineItemId);
+    setDraftTypeId(currentTypeId);
+    setDraftReason("");
+  };
+  const cancelEdit = () => {
+    setEditingId(null);
+    setDraftTypeId("");
+    setDraftReason("");
+  };
+  const saveEdit = async () => {
+    if (!onReclassify || !editingId) return;
+    setReclassifySaving(true);
+    try {
+      await onReclassify(editingId, draftTypeId, draftReason);
+      queryClient.invalidateQueries({ queryKey: ["report", reportId] });
+      cancelEdit();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Reclassify failed");
+    } finally {
+      setReclassifySaving(false);
+    }
+  };
 
   const nameById = new Map((usersQuery.data ?? []).map((u) => [u.id, u.name]));
   const groupNameById = new Map(
     (groupsQuery.data ?? []).map((g) => [g.group.id, g.group.name])
   );
-  const typeName = new Map(
-    (typesQuery.data ?? []).map((t) => [t.id, t.displayName])
-  );
+  const allTypes: ExpenseType[] = typesQuery.data ?? [];
+  const typeName = new Map(allTypes.map((t) => [t.id, t.displayName]));
+  const otherTypeId = allTypes.find((t) => !t.isMileage && t.displayName === "Other")?.id;
   const receiptById = new Map((receiptsQuery.data ?? []).map((r) => [r.id, r]));
 
   if (reportQuery.isLoading) {
@@ -180,40 +223,114 @@ export function ReportDetailView({
                 const receipt = li.receiptId
                   ? receiptById.get(li.receiptId)
                   : undefined;
+                const isEditing = onReclassify && editingId === li.id;
+                const rawTypeName = typeName.get(li.expenseTypeId) ?? "—";
+                const displayTypeName =
+                  li.expenseTypeId === otherTypeId && li.otherDescription
+                    ? `Other — ${li.otherDescription}`
+                    : rawTypeName;
                 return (
-                  <TableRow
-                    key={li.id}
-                    className={cn(
-                      "border-b border-table-row-divider",
-                      liIdx % 2 === 0 ? "bg-table-row-band" : "bg-background"
-                    )}
-                  >
-                    <TableCell className="text-muted-foreground">
-                      {formatDate(li.expenseDate)}
-                    </TableCell>
-                    <TableCell>{typeName.get(li.expenseTypeId) ?? "—"}</TableCell>
-                    <TableCell className="font-medium">{li.description}</TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {[li.city, li.state, li.country].filter(Boolean).join(", ")}
-                    </TableCell>
-                    <TableCell>
-                      {receipt ? (
-                        <button
-                          type="button"
-                          onClick={() => setLightbox(receipt)}
-                          className="rounded-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-                          aria-label="Enlarge receipt"
-                        >
-                          <ReceiptThumb receipt={receipt} className="size-10" />
-                        </button>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">—</span>
+                  <React.Fragment key={li.id}>
+                    <TableRow
+                      className={cn(
+                        "border-b border-table-row-divider",
+                        liIdx % 2 === 0 ? "bg-table-row-band" : "bg-background"
                       )}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {formatCurrency(li.amount)}
-                    </TableCell>
-                  </TableRow>
+                    >
+                      <TableCell className="text-muted-foreground">
+                        {formatDate(li.expenseDate)}
+                      </TableCell>
+                      <TableCell>
+                        {isEditing ? (
+                          <select
+                            className={SELECT_CLASS}
+                            value={draftTypeId}
+                            onChange={(e) => setDraftTypeId(e.target.value)}
+                            disabled={reclassifySaving}
+                          >
+                            {allTypes.filter((t) => !t.isMileage).map((t) => (
+                              <option key={t.id} value={t.id}>
+                                {t.displayName}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5">
+                            {displayTypeName}
+                            {li.reclassifiedAt && (
+                              <span
+                                className="inline-flex shrink-0 text-muted-foreground"
+                                title={`Reclassified by accounting on ${formatDateTime(li.reclassifiedAt)}`}
+                              >
+                                <Pencil className="size-3" />
+                              </span>
+                            )}
+                            {onReclassify && !editingId && (
+                              <button
+                                type="button"
+                                onClick={() => startEdit(li.id, li.expenseTypeId)}
+                                className="ml-0.5 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
+                                aria-label={`Reclassify line ${liIdx + 1}`}
+                              >
+                                <Pencil className="size-3" />
+                              </button>
+                            )}
+                          </span>
+                        )}
+                      </TableCell>
+                      <TableCell className="font-medium">{li.description}</TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {[li.city, li.state, li.country].filter(Boolean).join(", ")}
+                      </TableCell>
+                      <TableCell>
+                        {receipt ? (
+                          <button
+                            type="button"
+                            onClick={() => setLightbox(receipt)}
+                            className="rounded-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                            aria-label="Enlarge receipt"
+                          >
+                            <ReceiptThumb receipt={receipt} className="size-10" />
+                          </button>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {formatCurrency(li.amount)}
+                      </TableCell>
+                    </TableRow>
+                    {isEditing && (
+                      <TableRow className={liIdx % 2 === 0 ? "bg-table-row-band" : "bg-background"}>
+                        <TableCell colSpan={6} className="px-4 pb-3 pt-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Input
+                              className="h-8 flex-1 min-w-[12rem]"
+                              placeholder="Reason (optional)"
+                              value={draftReason}
+                              onChange={(e) => setDraftReason(e.target.value)}
+                              disabled={reclassifySaving}
+                            />
+                            <Button
+                              size="sm"
+                              onClick={saveEdit}
+                              disabled={reclassifySaving || draftTypeId === li.expenseTypeId}
+                            >
+                              {reclassifySaving ? "Saving…" : "Save"}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={cancelEdit}
+                              disabled={reclassifySaving}
+                            >
+                              Cancel
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </React.Fragment>
                 );
               })}
             </TableBody>

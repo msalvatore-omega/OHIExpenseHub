@@ -26,6 +26,7 @@ import {
   listDelegates,
   listExpenseTypes,
   listLineItems,
+  patchLineItem,
   listOutbox,
   listReceipts,
   listReports,
@@ -652,9 +653,9 @@ export async function replaceLineItems(
   const before = audited ? [...listLineItems(reportId)] : [];
   const prevTotal = report.totalAmount;
 
-  const mileageTypeIds = new Set(
-    listExpenseTypes().filter((t) => t.isMileage).map((t) => t.id)
-  );
+  const allTypes = listExpenseTypes();
+  const mileageTypeIds = new Set(allTypes.filter((t) => t.isMileage).map((t) => t.id));
+  const otherTypeId = allTypes.find((t) => !t.isMileage && t.displayName === "Other")?.id;
 
   const normalized: ExpenseLineItem[] = items.map((it) => {
     const isMileage = mileageTypeIds.has(it.expenseTypeId);
@@ -662,6 +663,7 @@ export async function replaceLineItems(
     const calculatedAmount =
       isMileage && miles != null ? round2(miles * MILEAGE_RATE) : undefined;
     const amount = isMileage ? calculatedAmount ?? 0 : it.amount ?? 0;
+    const isOther = it.expenseTypeId === otherTypeId;
     return {
       id: it.id ?? newId("line"),
       reportId,
@@ -676,6 +678,7 @@ export async function replaceLineItems(
       miles,
       calculatedAmount,
       receiptId: it.receiptId,
+      otherDescription: isOther ? it.otherDescription : undefined,
     };
   });
 
@@ -740,6 +743,79 @@ export async function replaceLineItems(
     }
   }
   return normalized;
+}
+
+/**
+ * Reclassify a single line item's expense type in-place.
+ * Only ACCOUNTING and ADMIN roles may call this. Status does not change.
+ */
+export async function reclassifyLineItemExpenseType(
+  reportId: string,
+  lineItemId: string,
+  newTypeId: string,
+  reason: string,
+  actorId: string
+): Promise<ExpenseLineItem> {
+  await delay();
+  const actor = userById(actorId);
+  if (actor?.role !== "ACCOUNTING" && actor?.role !== "ADMIN") {
+    throw new ForbiddenError("Only Accounting or Admin may reclassify expense types.");
+  }
+
+  const report = findReport(reportId);
+  if (!report) throw new Error(`Report ${reportId} not found`);
+
+  const lineItem = listLineItems(reportId).find((li) => li.id === lineItemId);
+  if (!lineItem) throw new Error(`Line item ${lineItemId} not found`);
+
+  const allTypes = listExpenseTypes();
+  const oldType = allTypes.find((t) => t.id === lineItem.expenseTypeId);
+  const newType = allTypes.find((t) => t.id === newTypeId);
+  if (!newType) throw new Error(`Expense type ${newTypeId} not found`);
+
+  const otherTypeId = allTypes.find((t) => !t.isMileage && t.displayName === "Other")?.id;
+
+  const patch: Partial<ExpenseLineItem> = {
+    expenseTypeId: newTypeId,
+    reclassifiedAt: nowIso(),
+    reclassifiedById: actorId,
+  };
+  if (newTypeId !== otherTypeId) {
+    patch.otherDescription = undefined;
+  }
+
+  const updated = patchLineItem(lineItemId, patch);
+  if (!updated) throw new Error(`Failed to patch line item ${lineItemId}`);
+
+  const oldName = oldType?.displayName ?? lineItem.expenseTypeId;
+  const newName = newType.displayName;
+
+  recordChange(reportId, actorId, "FIELD", "Expense type reclassified by accounting", {
+    field: "expenseTypeId",
+    oldValue: oldName,
+    newValue: newName,
+    note: reason || undefined,
+  });
+
+  const submitterId = report.onBehalfOfId ?? report.submitterId;
+  const submitter = userById(submitterId);
+  if (submitter?.email) {
+    const lineIdx = listLineItems(reportId).findIndex((li) => li.id === lineItemId);
+    const lineLabel = lineIdx >= 0 ? `Line ${lineIdx + 1}` : "A line item";
+    sendMockEmail(
+      submitter.email,
+      `Expense type updated on your report "${report.reportName}"`,
+      [
+        `${lineLabel} was reclassified from "${oldName}" to "${newName}" by accounting.`,
+        reason ? `Reason: ${reason}` : "",
+        `View report: /reports/${reportId}/view`,
+      ]
+        .filter(Boolean)
+        .join("\n\n")
+    );
+  }
+
+  return updated;
 }
 
 export async function submitReport(id: string): Promise<ApprovalActionResult> {

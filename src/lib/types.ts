@@ -137,6 +137,12 @@ export interface ExpenseLineItem {
   /** Computed reimbursement for mileage (miles * rate). */
   calculatedAmount?: number;
   receiptId?: string;
+  /** Free-text description required when expenseTypeId is the "Other" type. */
+  otherDescription?: string;
+  /** ISO timestamp set when accounting reclassifies this line item's type. */
+  reclassifiedAt?: string;
+  /** User ID of the accounting/admin who performed the reclassification. */
+  reclassifiedById?: string;
 }
 
 export interface ExpenseType {
@@ -318,6 +324,7 @@ export interface LineItemInput {
   amount?: number;
   miles?: number;
   receiptId?: string;
+  otherDescription?: string;
 }
 
 // ---- Mock OCR ----

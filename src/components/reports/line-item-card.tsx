@@ -55,6 +55,7 @@ export function LineItemCard({
   index,
   expenseTypes,
   mileageTypeIds,
+  otherTypeId,
   receiptsById,
   unattachedReceipts,
   canRemove,
@@ -64,6 +65,7 @@ export function LineItemCard({
   index: number;
   expenseTypes: ExpenseType[];
   mileageTypeIds: Set<string>;
+  otherTypeId: string | null;
   receiptsById: Map<string, Receipt>;
   unattachedReceipts: Receipt[];
   canRemove: boolean;
@@ -85,6 +87,7 @@ export function LineItemCard({
   const cityValue = useWatch({ control, name: `lineItems.${index}.city` });
 
   const isMileage = mileageTypeIds.has(expenseTypeId ?? "");
+  const isOther = otherTypeId !== null && expenseTypeId === otherTypeId;
   const calculated =
     isMileage && typeof miles === "number" ? miles * MILEAGE_RATE : 0;
 
@@ -194,6 +197,9 @@ export function LineItemCard({
               } else {
                 setValue(`lineItems.${index}.miles`, undefined);
               }
+              if (e.target.value !== otherTypeId) {
+                setValue(`lineItems.${index}.otherDescription`, undefined);
+              }
             }}
           >
             <option value="">Select type…</option>
@@ -221,6 +227,20 @@ export function LineItemCard({
         >
           <Input {...register(`lineItems.${index}.description`)} />
         </Field>
+
+        {isOther && (
+          <Field
+            label="Describe expense"
+            required
+            error={(errors as { otherDescription?: { message?: string } })?.otherDescription?.message}
+            className="col-span-2 sm:col-span-3"
+          >
+            <Input
+              {...register(`lineItems.${index}.otherDescription`)}
+              placeholder="Describe the expense…"
+            />
+          </Field>
+        )}
 
         {/* Country */}
         <Field label="Country" required error={errors?.country?.message}>

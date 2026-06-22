@@ -75,6 +75,7 @@ export function ReportPrintView({ reportId }: { reportId: string }) {
 
   const ownerId = report.onBehalfOfId ?? report.submitterId;
   const exportDate = new Date();
+  const otherTypeId = [...typeById.values()].find((t) => !t.isMileage && t.displayName === "Other")?.id;
 
   // Group line items by expense type for subtotals.
   const orderedTypeIds: string[] = [];
@@ -198,13 +199,17 @@ export function ReportPrintView({ reportId }: { reportId: string }) {
               const items = byType.get(typeId)!;
               const subtotal = items.reduce((s, li) => s + li.amount, 0);
               const expType = typeById.get(typeId);
-              const typeName = expType?.displayName ?? "—";
+              const isOtherType = typeId === otherTypeId;
+              const baseTypeName = expType?.displayName ?? "—";
               const glCode = expType?.glCode ?? "—";
               const glName = expType?.glName ?? "—";
               return (
                 <React.Fragment key={typeId}>
                   {items.map((li) => {
                     rowNum += 1;
+                    const typeName = isOtherType && li.otherDescription
+                      ? `Other — ${li.otherDescription}`
+                      : baseTypeName;
                     return (
                       <tr key={li.id} className="border-b border-border align-top">
                         <td className="px-2 py-1.5">{rowNum}</td>
@@ -224,7 +229,7 @@ export function ReportPrintView({ reportId }: { reportId: string }) {
                   })}
                   <tr className="border-b border-border bg-muted/30">
                     <td colSpan={7} className="px-2 py-1.5 text-right text-muted-foreground">
-                      Subtotal — {typeName}
+                      Subtotal — {baseTypeName}
                     </td>
                     <td className="px-2 py-1.5 text-right font-medium tabular-nums">
                       {formatCurrency(subtotal)}

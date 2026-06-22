@@ -58,10 +58,8 @@ function downloadWorkbook(ws: WorkSheet, sheetName: string, fileBase: string) {
   URL.revokeObjectURL(url);
 }
 
-// Column segments are kept separate so they can be joined conditionally.
-// GL Code + GL Name are included in the sheet only when includeGlColumns is true;
-// the columns are omitted entirely (not blanked) for SUBMITTER/APPROVER exports.
-const HEADERS_PRE_GL = [
+// GL Code and GL Name are always included — exports are accounting-facing documents.
+const HEADERS = [
   "Report Name",
   "Report ID",
   "Submitter",
@@ -71,11 +69,8 @@ const HEADERS_PRE_GL = [
   "Period To",
   "Expense Date",
   "Expense Type",
-] as const;
-
-const HEADERS_GL = ["GL Code", "GL Name"] as const;
-
-const HEADERS_POST_GL = [
+  "GL Code",
+  "GL Name",
   "Purpose",
   "Description",
   "City",
@@ -90,9 +85,8 @@ const HEADERS_POST_GL = [
   "Approval Date",
 ] as const;
 
-// "Amount" is the 6th column in HEADERS_POST_GL (0-indexed: 5).
-// Its absolute index shifts depending on whether GL columns are present.
-const AMOUNT_POST_GL_IDX = 5; // index of "Amount" within HEADERS_POST_GL
+// "Amount" is at index 16 (0-based) in HEADERS.
+const AMOUNT_COL = 16;
 
 const CURRENCY_FMT = '"$"#,##0.00';
 
@@ -101,12 +95,12 @@ export interface ExcelExportContext {
   usersById: Map<string, User>;
   typesById: Map<string, ExpenseType>;
   receiptsById: Map<string, Receipt>;
-  /** Only ADMIN / ACCOUNTING see GL code + GL name. */
-  includeGlColumns: boolean;
+  /** @deprecated GL columns are now always included; this parameter is ignored. */
+  includeGlColumns?: boolean;
 }
 
 export function exportReportToExcel(ctx: ExcelExportContext): void {
-  const { report, usersById, typesById, receiptsById, includeGlColumns } = ctx;
+  const { report, usersById, typesById, receiptsById } = ctx;
 
   const name = (id?: string) => (id && usersById.get(id)?.name) || "";
   const ownerId = report.onBehalfOfId ?? report.submitterId;
@@ -120,21 +114,19 @@ export function exportReportToExcel(ctx: ExcelExportContext): void {
   const approvedBy = approved ? name(approved.approverId) : "";
   const approvalDate = approved ? approved.createdAt.slice(0, 10) : "";
 
-  const headers = [
-    ...HEADERS_PRE_GL,
-    ...(includeGlColumns ? HEADERS_GL : []),
-    ...HEADERS_POST_GL,
-  ];
+  const currencyCols = [AMOUNT_COL, AMOUNT_COL + 2]; // Amount, Calculated Amount
 
-  // Absolute column index of "Amount" shifts by 2 when GL columns are present.
-  const amountCol =
-    HEADERS_PRE_GL.length +
-    (includeGlColumns ? HEADERS_GL.length : 0) +
-    AMOUNT_POST_GL_IDX;
-  const currencyCols = [amountCol, amountCol + 2]; // Amount, Calculated Amount
+  const otherTypeId = [...typesById.values()].find(
+    (t) => !t.isMileage && t.displayName === "Other"
+  )?.id;
 
   const rows = report.lineItems.map((li) => {
     const type = typesById.get(li.expenseTypeId);
+    const isOther = li.expenseTypeId === otherTypeId;
+    const typeDisplay =
+      isOther && li.otherDescription
+        ? `Other — ${li.otherDescription}`
+        : (type?.displayName ?? "");
     const attached =
       li.receiptId && receiptsById.get(li.receiptId) ? "Yes" : "No";
     return [
@@ -146,8 +138,9 @@ export function exportReportToExcel(ctx: ExcelExportContext): void {
       report.periodFrom,
       report.periodTo,
       li.expenseDate,
-      type?.displayName ?? "",
-      ...(includeGlColumns ? [type?.glCode ?? "", type?.glName ?? ""] : []),
+      typeDisplay,
+      type?.glCode ?? "",
+      type?.glName ?? "",
       li.purposeOfTrip,
       li.description,
       li.city,
@@ -163,9 +156,9 @@ export function exportReportToExcel(ctx: ExcelExportContext): void {
     ];
   });
 
-  const ws: WorkSheet = utils.aoa_to_sheet([[...headers], ...rows]);
-  ws["!cols"] = headers.map((h) => ({ wch: Math.max(12, h.length + 2) }));
-  styleHeader(ws, headers.length);
+  const ws: WorkSheet = utils.aoa_to_sheet([[...HEADERS], ...rows]);
+  ws["!cols"] = [...HEADERS].map((h) => ({ wch: Math.max(12, h.length + 2) }));
+  styleHeader(ws, HEADERS.length);
   applyCurrency(ws, rows.length, currencyCols);
   downloadWorkbook(ws, "Expense Report", report.reportName || "expense-report");
 }

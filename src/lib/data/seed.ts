@@ -65,6 +65,8 @@ const ET = {
   subscription: "etype-subscription-dues",
   other: "etype-other-expenses",
   mileage: "etype-mileage",
+  /** The "Other" free-text expense type (distinct from the "Gift" type). */
+  freeOther: "etype-other",
 } as const;
 
 function buildUsers(): User[] {
@@ -228,6 +230,8 @@ export function buildExpenseTypes(): ExpenseType[] {
     t("etype-state", "State", "MR5100500320", "State Tax Expense"),
     t("etype-software", "Computer Software EXP", "MR5100501220", "Software Exp"),
     t("etype-ait", "AIT", "MR4000003050", "Revenue - AIT - Admin in Training"),
+    // Free-text "Other" — submitter must describe; GL filled in by accounting if needed.
+    { id: ET.freeOther, displayName: "Other", glCode: "", glName: "Other", isMileage: false },
     // Mileage: GL code blank for now (fillable later from the Admin tab).
     { id: ET.mileage, displayName: "Mileage", glCode: "", glName: "Mileage", isMileage: true },
   ];
