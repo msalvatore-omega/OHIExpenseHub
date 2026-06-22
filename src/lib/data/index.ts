@@ -119,8 +119,8 @@ export class ConflictError extends Error {
   }
 }
 
-/** Simulate a 200–500ms round-trip. */
-function delay(min = 200, max = 500): Promise<void> {
+/** Simulate a short async round-trip without adding noticeable latency. */
+function delay(min = 0, max = 40): Promise<void> {
   const ms = Math.floor(min + Math.random() * (max - min));
   return new Promise((resolve) => setTimeout(resolve, ms));
 }

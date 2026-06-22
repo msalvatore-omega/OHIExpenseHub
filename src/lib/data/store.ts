@@ -44,13 +44,20 @@ function loadFromStorage(): Database | null {
   }
 }
 
+let _persistTimer: ReturnType<typeof setTimeout> | null = null;
+
 function persist(): void {
   if (!isBrowser() || !db) return;
-  try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
-  } catch {
-    // Ignore quota / private-mode write failures in the prototype.
-  }
+  // Debounce: coalesce rapid back-to-back writes into a single serialisation.
+  if (_persistTimer !== null) clearTimeout(_persistTimer);
+  _persistTimer = setTimeout(() => {
+    _persistTimer = null;
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+    } catch {
+      // Ignore quota / private-mode write failures in the prototype.
+    }
+  }, 300);
 }
 
 /** Lazily initialize and return the singleton database. */
