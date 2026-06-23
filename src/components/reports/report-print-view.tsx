@@ -229,8 +229,6 @@ export function ReportPrintView({ reportId }: { reportId: string }) {
               const expType = typeById.get(typeId);
               const isOtherType = typeId === otherTypeId;
               const baseTypeName = expType?.displayName ?? "—";
-              const glCode = expType?.glCode ?? "—";
-              const glName = expType?.glName ?? "—";
               return (
                 <React.Fragment key={typeId}>
                   {items.map((li) => {
@@ -238,6 +236,8 @@ export function ReportPrintView({ reportId }: { reportId: string }) {
                     const typeName = isOtherType && li.otherDescription
                       ? `Other — ${li.otherDescription}`
                       : baseTypeName;
+                    const lineGlCode = li.glCodeOverride ?? expType?.glCode ?? "—";
+                    const lineGlName = li.glNameOverride ?? expType?.glName ?? "—";
                     const reclassLog = reclassifyLogByItemId.get(li.id);
                     return (
                       <React.Fragment key={li.id}>
@@ -247,8 +247,8 @@ export function ReportPrintView({ reportId }: { reportId: string }) {
                             {formatDate(li.expenseDate)}
                           </td>
                           <td className="px-2 py-1.5">{typeName}</td>
-                          <td className="px-2 py-1.5">{glCode}</td>
-                          <td className="px-2 py-1.5">{glName}</td>
+                          <td className="px-2 py-1.5">{lineGlCode}</td>
+                          <td className="px-2 py-1.5">{lineGlName}</td>
                           <td className="px-2 py-1.5">{li.description}</td>
                           <td className="px-2 py-1.5">{location(li)}</td>
                           <td className="px-2 py-1.5 text-right tabular-nums">

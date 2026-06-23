@@ -73,6 +73,7 @@ export function ReportDetailView({
   footer,
   reserveBottomSpace = false,
   onReclassify,
+  onSaveOtherLineGl,
 }: {
   reportId: string;
   /** Right-aligned header slot (e.g. export buttons). */
@@ -88,6 +89,11 @@ export function ReportDetailView({
    * reclassification UI on each line item row.
    */
   onReclassify?: (lineItemId: string, newTypeId: string, reason: string) => Promise<void>;
+  /**
+   * When provided (accounting/admin views only), renders inline GL Code + GL Name
+   * inputs for Other-type line items.
+   */
+  onSaveOtherLineGl?: (lineItemId: string, glCode: string, glName: string) => Promise<void>;
 }) {
   const reportQuery = useQuery({
     queryKey: ["report", reportId],
@@ -119,6 +125,36 @@ export function ReportDetailView({
   const [draftTypeId, setDraftTypeId] = React.useState("");
   const [draftReason, setDraftReason] = React.useState("");
   const [reclassifySaving, setReclassifySaving] = React.useState(false);
+
+  // ---- GL override inline edit state (Other-type lines, accounting/admin only) ----
+  const [glDrafts, setGlDrafts] = React.useState<Map<string, { code: string; name: string }>>(
+    new Map()
+  );
+  const [glSaving, setGlSaving] = React.useState<string | null>(null);
+
+  const getGlDraft = (li: { id: string; glCodeOverride?: string; glNameOverride?: string }) =>
+    glDrafts.get(li.id) ?? { code: li.glCodeOverride ?? "", name: li.glNameOverride ?? "" };
+
+  const setGlDraft = (liId: string, code: string, name: string) =>
+    setGlDrafts((prev) => new Map(prev).set(liId, { code, name }));
+
+  const handleSaveGl = async (liId: string, code: string, name: string) => {
+    if (!onSaveOtherLineGl) return;
+    setGlSaving(liId);
+    try {
+      await onSaveOtherLineGl(liId, code, name);
+      queryClient.invalidateQueries({ queryKey: ["report", reportId] });
+      setGlDrafts((prev) => {
+        const next = new Map(prev);
+        next.delete(liId);
+        return next;
+      });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save GL");
+    } finally {
+      setGlSaving(null);
+    }
+  };
 
   const startEdit = (lineItemId: string, currentTypeId: string) => {
     setEditingId(lineItemId);
@@ -369,6 +405,46 @@ export function ReportDetailView({
                         </TableCell>
                       </TableRow>
                     )}
+                    {onSaveOtherLineGl && li.expenseTypeId === otherTypeId && !isEditing && (() => {
+                      const draft = getGlDraft(li);
+                      const stored = { code: li.glCodeOverride ?? "", name: li.glNameOverride ?? "" };
+                      const isDirty = draft.code !== stored.code || draft.name !== stored.name;
+                      const isSavingThis = glSaving === li.id;
+                      return (
+                        <TableRow className={liIdx % 2 === 0 ? "bg-table-row-band" : "bg-background"}>
+                          <TableCell colSpan={6} className="px-4 pb-3 pt-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">
+                                GL →
+                              </span>
+                              <Input
+                                className="h-8 w-36 font-mono"
+                                placeholder="e.g. MR5100502100"
+                                maxLength={30}
+                                value={draft.code}
+                                onChange={(e) => setGlDraft(li.id, e.target.value, draft.name)}
+                                disabled={isSavingThis}
+                              />
+                              <Input
+                                className="h-8 flex-1 min-w-[12rem]"
+                                placeholder="e.g. Conferences Other"
+                                maxLength={255}
+                                value={draft.name}
+                                onChange={(e) => setGlDraft(li.id, draft.code, e.target.value)}
+                                disabled={isSavingThis}
+                              />
+                              <Button
+                                size="sm"
+                                onClick={() => handleSaveGl(li.id, draft.code, draft.name)}
+                                disabled={!isDirty || isSavingThis}
+                              >
+                                {isSavingThis ? "Saving…" : "Save GL"}
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })()}
                   </React.Fragment>
                 );
               })}

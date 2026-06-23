@@ -143,6 +143,10 @@ export interface ExpenseLineItem {
   reclassifiedAt?: string;
   /** User ID of the accounting/admin who performed the reclassification. */
   reclassifiedById?: string;
+  /** GL code assigned by accounting to an "Other"-type line (overrides the blank catalog value). */
+  glCodeOverride?: string;
+  /** GL name assigned by accounting to an "Other"-type line (overrides the blank catalog value). */
+  glNameOverride?: string;
 }
 
 export interface ExpenseType {

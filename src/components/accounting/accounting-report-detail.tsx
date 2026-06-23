@@ -3,7 +3,7 @@
 import * as React from "react";
 
 import { useSession } from "@/lib/auth/mock-session";
-import { reclassifyLineItemExpenseType } from "@/lib/data";
+import { reclassifyLineItemExpenseType, saveOtherLineGl } from "@/lib/data";
 import { ReportDetailView } from "@/components/reports/report-detail-view";
 
 export function AccountingReportDetail({
@@ -23,11 +23,20 @@ export function AccountingReportDetail({
     await reclassifyLineItemExpenseType(reportId, lineItemId, newTypeId, reason, user.id);
   };
 
+  const handleSaveOtherLineGl = async (
+    lineItemId: string,
+    glCode: string,
+    glName: string
+  ) => {
+    await saveOtherLineGl(reportId, lineItemId, glCode, glName, user.id);
+  };
+
   return (
     <ReportDetailView
       reportId={reportId}
       actions={actions}
       onReclassify={handleReclassify}
+      onSaveOtherLineGl={handleSaveOtherLineGl}
     />
   );
 }

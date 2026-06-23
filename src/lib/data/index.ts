@@ -673,8 +673,10 @@ export async function replaceLineItems(
   const report = findReport(reportId);
   if (!report) throw new Error(`Report ${reportId} not found`);
 
+  const existingItems = listLineItems(reportId);
+  const existingById = new Map(existingItems.map((li) => [li.id, li]));
   const audited = isAudited(report);
-  const before = audited ? [...listLineItems(reportId)] : [];
+  const before = audited ? [...existingItems] : [];
   const prevTotal = report.totalAmount;
 
   const allTypes = listExpenseTypes();
@@ -688,6 +690,7 @@ export async function replaceLineItems(
       isMileage && miles != null ? round2(miles * liveMileageRate()) : undefined;
     const amount = isMileage ? calculatedAmount ?? 0 : it.amount ?? 0;
     const isOther = it.expenseTypeId === otherTypeId;
+    const existing = it.id ? existingById.get(it.id) : undefined;
     return {
       id: it.id ?? newId("line"),
       reportId,
@@ -703,6 +706,8 @@ export async function replaceLineItems(
       calculatedAmount,
       receiptId: it.receiptId,
       otherDescription: isOther ? it.otherDescription : undefined,
+      glCodeOverride: isOther ? existing?.glCodeOverride : undefined,
+      glNameOverride: isOther ? existing?.glNameOverride : undefined,
     };
   });
 
@@ -806,6 +811,8 @@ export async function reclassifyLineItemExpenseType(
   };
   if (newTypeId !== otherTypeId) {
     patch.otherDescription = undefined;
+    patch.glCodeOverride = undefined;
+    patch.glNameOverride = undefined;
   }
 
   const updated = patchLineItem(lineItemId, patch);
@@ -839,6 +846,41 @@ export async function reclassifyLineItemExpenseType(
     );
   }
 
+  return updated;
+}
+
+export async function saveOtherLineGl(
+  reportId: string,
+  lineItemId: string,
+  glCode: string,
+  glName: string,
+  actorId: string
+): Promise<ExpenseLineItem> {
+  await delay();
+  const actor = userById(actorId);
+  if (actor?.role !== "ACCOUNTING" && actor?.role !== "ADMIN") {
+    throw new ForbiddenError("Only Accounting or Admin may set GL overrides.");
+  }
+  const lineItem = listLineItems(reportId).find((li) => li.id === lineItemId);
+  if (!lineItem) throw new Error(`Line item ${lineItemId} not found`);
+  const allTypes = listExpenseTypes();
+  const otherTypeId = allTypes.find((t) => !t.isMileage && t.displayName === "Other")?.id;
+  if (lineItem.expenseTypeId !== otherTypeId) {
+    throw new Error("GL overrides can only be set on Other-type line items.");
+  }
+  const oldCode = lineItem.glCodeOverride ?? "";
+  const oldName = lineItem.glNameOverride ?? "";
+  const newCode = glCode.trim() || undefined;
+  const newName = glName.trim() || undefined;
+  const updated = patchLineItem(lineItemId, { glCodeOverride: newCode, glNameOverride: newName });
+  if (!updated) throw new Error(`Failed to update line item ${lineItemId}`);
+  if ((newCode ?? "") !== oldCode || (newName ?? "") !== oldName) {
+    recordChange(reportId, actorId, "FIELD", "Other-line GL assigned by accounting", {
+      field: "glCodeOverride",
+      oldValue: [oldCode, oldName].filter(Boolean).join(" / ") || "(blank)",
+      newValue: [newCode ?? "", newName ?? ""].filter(Boolean).join(" / ") || "(blank)",
+    });
+  }
   return updated;
 }
 
