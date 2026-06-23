@@ -9,6 +9,7 @@ import { MILEAGE_RATE } from "@/lib/constants";
 import { formatCurrency } from "@/lib/format";
 import {
   COUNTRY_ITEMS,
+  US_DEFAULT_STATE,
   getSubdivisions,
   countryNameToCode,
 } from "@/lib/location-data";
@@ -141,8 +142,14 @@ export function LineItemCard({
   // ---- Country / state change handlers ----
 
   function handleCountryChange(name: string) {
+    const newCode = countryNameToCode(name) ?? "";
     setValue(`lineItems.${index}.country`, name, { shouldDirty: true });
-    setValue(`lineItems.${index}.state`, "", { shouldDirty: true });
+    // Default to Maryland when the user picks United States; blank otherwise.
+    setValue(
+      `lineItems.${index}.state`,
+      newCode === "US" ? US_DEFAULT_STATE : "",
+      { shouldDirty: true }
+    );
     setValue(`lineItems.${index}.city`, "", { shouldDirty: true });
     setCitySuggestions([]);
   }

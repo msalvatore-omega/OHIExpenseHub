@@ -12,6 +12,13 @@ export function isDivider(item: ComboboxItem): item is { divider: true } {
   return "divider" in item;
 }
 
+/** An item in a subdivision (state / province) combobox — a string name or a visual divider. */
+export type SubdivisionItem = string | { divider: true };
+
+export function isSubdivisionDivider(item: SubdivisionItem): item is { divider: true } {
+  return typeof item === "object" && "divider" in item;
+}
+
 // Pinned at top of country list.
 const PINNED: CountryOption[] = [
   { code: "US", name: "United States" },
@@ -234,15 +241,19 @@ export function countryNameToCode(name: string): string | undefined {
 
 // ---- Subdivisions ----
 
-export const US_STATES: string[] = [
+/** States pinned at the top of the US dropdown (OHI headquarters states). */
+const US_PINNED_STATES = ["Maryland", "Pennsylvania"] as const;
+
+/** Alphabetical US states + DC + territories, excluding pinned entries. */
+const US_STATES_ALPHA: string[] = [
   "Alabama", "Alaska", "Arizona", "Arkansas", "California",
   "Colorado", "Connecticut", "Delaware", "Florida", "Georgia",
   "Hawaii", "Idaho", "Illinois", "Indiana", "Iowa",
-  "Kansas", "Kentucky", "Louisiana", "Maine", "Maryland",
+  "Kansas", "Kentucky", "Louisiana", "Maine",
   "Massachusetts", "Michigan", "Minnesota", "Mississippi", "Missouri",
   "Montana", "Nebraska", "Nevada", "New Hampshire", "New Jersey",
   "New Mexico", "New York", "North Carolina", "North Dakota", "Ohio",
-  "Oklahoma", "Oregon", "Pennsylvania", "Rhode Island", "South Carolina",
+  "Oklahoma", "Oregon", "Rhode Island", "South Carolina",
   "South Dakota", "Tennessee", "Texas", "Utah", "Vermont",
   "Virginia", "Washington", "West Virginia", "Wisconsin", "Wyoming",
   "District of Columbia",
@@ -250,6 +261,26 @@ export const US_STATES: string[] = [
   "American Samoa", "Guam", "Northern Mariana Islands",
   "Puerto Rico", "U.S. Virgin Islands",
 ];
+
+/** Flat string list of all US states (for code that only needs names, not ordering). */
+export const US_STATES: string[] = [
+  ...US_PINNED_STATES,
+  ...US_STATES_ALPHA,
+];
+
+/**
+ * US state dropdown items: Maryland + Pennsylvania pinned at top, divider, then
+ * the remaining states alphabetically.  Use this for rendering; use US_STATES for
+ * lookups and validation.
+ */
+export const US_STATE_ITEMS: SubdivisionItem[] = [
+  ...US_PINNED_STATES,
+  { divider: true },
+  ...US_STATES_ALPHA,
+];
+
+/** Default US state selected when a user picks United States as the country. */
+export const US_DEFAULT_STATE = "Maryland";
 
 export const CANADA_PROVINCES: string[] = [
   "Alberta", "British Columbia", "Manitoba", "New Brunswick",
@@ -263,16 +294,16 @@ export const UK_COUNTRIES: string[] = [
 ];
 
 /** Countries whose subdivisions have a structured dropdown. */
-const SUBDIVISION_MAP: Record<string, string[]> = {
-  US: US_STATES,
+const SUBDIVISION_MAP: Record<string, SubdivisionItem[]> = {
+  US: US_STATE_ITEMS,
   CA: CANADA_PROVINCES,
   GB: UK_COUNTRIES,
 };
 
 /**
- * Returns the subdivision list for the given country code, or null if the
+ * Returns the subdivision item list for the given country code, or null if the
  * country uses a freeform state / region field.
  */
-export function getSubdivisions(countryCode: string): string[] | null {
+export function getSubdivisions(countryCode: string): SubdivisionItem[] | null {
   return SUBDIVISION_MAP[countryCode.toUpperCase()] ?? null;
 }

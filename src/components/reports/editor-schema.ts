@@ -83,7 +83,7 @@ export const EMPTY_LINE_ITEM: LineItemForm = {
   purposeOfTrip: "",
   description: "",
   city: "",
-  state: "",
+  state: "Maryland",
   country: "United States",
   expenseTypeId: "",
   miles: undefined,

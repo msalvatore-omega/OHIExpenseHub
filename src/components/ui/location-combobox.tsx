@@ -9,7 +9,13 @@ import { Popover as PopoverPrimitive } from "@base-ui/react/popover";
 import { Check, ChevronsUpDown } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { isDivider, type ComboboxItem, type CountryOption } from "@/lib/location-data";
+import {
+  isDivider,
+  isSubdivisionDivider,
+  type ComboboxItem,
+  type CountryOption,
+  type SubdivisionItem,
+} from "@/lib/location-data";
 
 // ---- Shared trigger / popup helpers ----------------------------------------
 
@@ -183,7 +189,7 @@ export function SubdivisionCombobox({
 }: {
   value: string;
   onChange: (v: string) => void;
-  options: string[];
+  options: SubdivisionItem[];
   placeholder?: string;
   className?: string;
   disabled?: boolean;
@@ -191,10 +197,13 @@ export function SubdivisionCombobox({
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
 
-  const filtered = React.useMemo(() => {
+  const filtered = React.useMemo<SubdivisionItem[]>(() => {
     if (!query.trim()) return options;
+    // When searching, strip dividers and filter string items only.
     const q = query.toLowerCase();
-    return options.filter((o) => o.toLowerCase().includes(q));
+    return options.filter(
+      (o): o is string => typeof o === "string" && o.toLowerCase().includes(q)
+    );
   }, [options, query]);
 
   function handleSelect(opt: string) {
@@ -208,6 +217,8 @@ export function SubdivisionCombobox({
     if (!next) setQuery("");
   }
 
+  const hasResults = filtered.some((o) => !isSubdivisionDivider(o));
+
   return (
     <PopoverPrimitive.Root open={open} onOpenChange={handleOpenChange}>
       <PopoverPrimitive.Trigger className={triggerCls(!!value, className)} disabled={disabled}>
@@ -215,18 +226,23 @@ export function SubdivisionCombobox({
         <ChevronsUpDown className="size-3.5 shrink-0 text-muted-foreground" />
       </PopoverPrimitive.Trigger>
       <ComboboxPopup query={query} onQueryChange={setQuery}>
-        {filtered.length === 0 ? (
+        {!hasResults ? (
           <p className="py-4 text-center text-sm text-muted-foreground">No results</p>
         ) : (
-          filtered.map((opt) => (
-            <OptionButton
-              key={opt}
-              isSelected={opt === value}
-              onClick={() => handleSelect(opt)}
-            >
-              {opt}
-            </OptionButton>
-          ))
+          filtered.map((item, i) => {
+            if (isSubdivisionDivider(item)) {
+              return <div key={`div-${i}`} className="mx-1 my-1 h-px bg-border" />;
+            }
+            return (
+              <OptionButton
+                key={item}
+                isSelected={item === value}
+                onClick={() => handleSelect(item)}
+              >
+                {item}
+              </OptionButton>
+            );
+          })
         )}
       </ComboboxPopup>
     </PopoverPrimitive.Root>
