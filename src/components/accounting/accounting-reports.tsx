@@ -26,7 +26,6 @@ import { formatCurrency, formatDate, formatDateTime } from "@/lib/format";
 import {
   getAccountingReports,
   getExpenseTypes,
-  getLedgerEntries,
   getReceipts,
   getReport,
   getReportChanges,
@@ -159,21 +158,6 @@ export function AccountingReports() {
         onStatusChange={setStatuses}
       />
       <ReportsTab filter={filter} statuses={statuses} showCodes={showCodes} />
-    </div>
-  );
-}
-
-/** Expense-Type Summary with person/period filters. */
-export function AccountingExpenseTypeSummary() {
-  const { role } = useSession();
-  const showCodes = role === "ADMIN" || role === "ACCOUNTING";
-  const [filter, setFilter] = React.useState<PeopleFilter>(EMPTY_FILTER);
-  const users = useQuery({ queryKey: ["users"], queryFn: getUsers });
-
-  return (
-    <div className="flex flex-col gap-4">
-      <ReportFilters filter={filter} onChange={setFilter} users={users.data ?? []} />
-      <ExpenseTypeSummaryTab filter={filter} showCodes={showCodes} />
     </div>
   );
 }
@@ -613,110 +597,6 @@ function RowActionCells({
   );
 }
 
-// ---------------- Tab 2: Expense-Type Summary ----------------
-
-function ExpenseTypeSummaryTab({
-  filter,
-  showCodes,
-}: {
-  filter: PeopleFilter;
-  showCodes: boolean;
-}) {
-  const ledger = useQuery({
-    queryKey: ["ledger"],
-    queryFn: () => getLedgerEntries(),
-  });
-
-  const summary = React.useMemo(() => {
-    const map = new Map<
-      string,
-      {
-        name: string;
-        glCode: string;
-        glName: string;
-        total: number;
-        reportIds: Set<string>;
-      }
-    >();
-    for (const e of ledger.data ?? []) {
-      if (!matchesPerson(e.submitterId, e.paidToId, filter)) continue;
-      if (!periodOverlaps(e.periodFrom, e.periodTo, filter)) continue;
-      const cur =
-        map.get(e.expenseTypeId) ?? {
-          name: e.expenseTypeName,
-          glCode: e.glCode,
-          glName: e.glName,
-          total: 0,
-          reportIds: new Set<string>(),
-        };
-      cur.total += e.amount;
-      cur.reportIds.add(e.reportId);
-      map.set(e.expenseTypeId, cur);
-    }
-    return [...map.values()]
-      .map((s) => ({
-        name: s.name,
-        glCode: s.glCode,
-        glName: s.glName,
-        total: s.total,
-        count: s.reportIds.size,
-      }))
-      .sort((a, b) => b.total - a.total);
-  }, [ledger.data, filter]);
-
-  return (
-    <div className="overflow-hidden rounded-xl border border-border">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Expense Type</TableHead>
-            {showCodes && <TableHead>GL Code</TableHead>}
-            {showCodes && <TableHead>GL Name</TableHead>}
-            <TableHead className="text-right">Report Count</TableHead>
-            <TableHead className="text-right">Total Amount</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {ledger.isLoading ? (
-            Array.from({ length: 4 }).map((_, i) => (
-              <TableRow key={i}>
-                {Array.from({ length: showCodes ? 5 : 3 }).map((__, j) => (
-                  <TableCell key={j}>
-                    <Skeleton className="h-4 w-full" />
-                  </TableCell>
-                ))}
-              </TableRow>
-            ))
-          ) : summary.length === 0 ? (
-            <TableRow>
-              <TableCell
-                colSpan={showCodes ? 5 : 3}
-                className="h-24 text-center text-sm text-muted-foreground"
-              >
-                No expenses match the current filters.
-              </TableCell>
-            </TableRow>
-          ) : (
-            summary.map((s) => (
-              <TableRow key={s.name}>
-                <TableCell className="font-medium">{s.name}</TableCell>
-                {showCodes && (
-                  <TableCell className="tabular-nums">{s.glCode}</TableCell>
-                )}
-                {showCodes && <TableCell>{s.glName}</TableCell>}
-                <TableCell className="text-right tabular-nums">{s.count}</TableCell>
-                <TableCell className="text-right tabular-nums">
-                  {formatCurrency(s.total)}
-                </TableCell>
-              </TableRow>
-            ))
-          )}
-        </TableBody>
-      </Table>
-    </div>
-  );
-}
-
 // ---------------- Tab 4: Change Log ----------------
 
 const CHANGE_TYPE_LABEL: Record<ReportChangeType, string> = {
@@ -734,7 +614,7 @@ function changeSortValue(row: ReportChangeLogRow, key: ChangeSortKey): string {
     case "date":
       return row.change.changedAt;
     case "reportId":
-      return row.change.reportId;
+      return row.change.reportId ?? "";
     case "reportName":
       return row.reportName.toLowerCase();
     case "type":
@@ -854,14 +734,14 @@ function ChangeLogTab({ filter }: { filter: PeopleFilter }) {
               rows.map((r) => (
                 <TableRow
                   key={r.change.id}
-                  onClick={() => setOpenReportId(r.change.reportId)}
-                  className="cursor-pointer"
+                  onClick={() => r.change.reportId && setOpenReportId(r.change.reportId)}
+                  className={r.change.reportId ? "cursor-pointer" : undefined}
                 >
                   <TableCell className="whitespace-nowrap text-muted-foreground">
                     {formatDateTime(r.change.changedAt)}
                   </TableCell>
                   <TableCell className="font-mono text-xs text-muted-foreground">
-                    {r.change.reportId}
+                    {r.change.reportId ?? "—"}
                   </TableCell>
                   <TableCell className="font-medium">{r.reportName}</TableCell>
                   <TableCell>{CHANGE_TYPE_LABEL[r.change.changeType]}</TableCell>

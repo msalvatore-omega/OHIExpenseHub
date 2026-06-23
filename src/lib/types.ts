@@ -153,6 +153,8 @@ export interface ExpenseType {
   /** GL name / description, e.g. "Business Travel". */
   glName: string;
   isMileage: boolean;
+  /** When false the type is hidden from new-expense dropdowns but kept on historical line items. */
+  isActive: boolean;
 }
 
 export interface Receipt {
@@ -223,7 +225,8 @@ export interface AppSettings {
  */
 export interface ReportChangeLog {
   id: string;
-  reportId: string;
+  /** Null for system-level audit entries (e.g. expense type create/update/delete). */
+  reportId: string | null;
   changedById: string;
   changedAt: string;
   changeType: ReportChangeType;
@@ -410,6 +413,7 @@ export interface ExpenseTypeInput {
   glCode: string;
   glName: string;
   isMileage: boolean;
+  isActive?: boolean;
 }
 
 // ---- Mock duplicate detection ----

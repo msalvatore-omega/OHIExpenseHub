@@ -43,6 +43,7 @@ import {
   patchUser,
   recalcReportTotal,
   removeDelegate,
+  removeExpenseType,
   removeReport,
   removeUser,
   replaceLineItemsForReport,
@@ -508,7 +509,7 @@ export async function getReportChanges(): Promise<ReportChangeLogRow[]> {
   return [...listChangeLogs()]
     .sort((a, b) => b.changedAt.localeCompare(a.changedAt))
     .map((change) => {
-      const report = reportById.get(change.reportId);
+      const report = change.reportId ? reportById.get(change.reportId) : undefined;
       return {
         change,
         reportName: report?.reportName ?? "—",
@@ -1420,6 +1421,22 @@ export async function getExpenseTypes(): Promise<ExpenseType[]> {
   );
 }
 
+export async function getActiveExpenseTypes(): Promise<ExpenseType[]> {
+  await delay();
+  return [...listExpenseTypes()]
+    .filter((t) => t.isActive)
+    .sort((a, b) => a.displayName.localeCompare(b.displayName, undefined, { sensitivity: "base" }));
+}
+
+export async function getExpenseTypeUsageCounts(): Promise<Record<string, number>> {
+  await delay();
+  const counts: Record<string, number> = {};
+  for (const li of listLineItems()) {
+    counts[li.expenseTypeId] = (counts[li.expenseTypeId] ?? 0) + 1;
+  }
+  return counts;
+}
+
 // ---- System settings ----
 
 /** Resolve the known system settings into a typed view (with fallbacks). */
@@ -1680,26 +1697,108 @@ export async function deleteDelegate(id: string): Promise<void> {
 }
 
 export async function createExpenseType(
-  input: ExpenseTypeInput
+  input: ExpenseTypeInput,
+  actorId?: string
 ): Promise<ExpenseType> {
   await delay();
-  return insertExpenseType({
+  const duplicate = listExpenseTypes().find(
+    (t) => t.displayName.trim().toLowerCase() === input.displayName.trim().toLowerCase()
+  );
+  if (duplicate) {
+    throw new Error(`An expense type named "${duplicate.displayName}" already exists.`);
+  }
+  if (input.isMileage) {
+    const prev = listExpenseTypes().find((t) => t.isMileage);
+    if (prev) patchExpenseType(prev.id, { isMileage: false });
+  }
+  const type = insertExpenseType({
     id: newId("etype"),
-    displayName: input.displayName,
-    glCode: input.glCode,
-    glName: input.glName,
+    displayName: input.displayName.trim(),
+    glCode: input.glCode.trim(),
+    glName: input.glName.trim(),
     isMileage: input.isMileage,
+    isActive: input.isActive ?? true,
   });
+  if (actorId) {
+    insertChangeLog({
+      id: newId("change"),
+      reportId: null,
+      changedById: actorId,
+      changedAt: nowIso(),
+      changeType: "OTHER",
+      field: "expenseType",
+      summary: `Expense type "${type.displayName}" created`,
+      newValue: type.displayName,
+    });
+  }
+  return type;
 }
 
 export async function updateExpenseType(
   id: string,
-  patch: Partial<ExpenseType>
+  patch: Partial<ExpenseType>,
+  actorId?: string
 ): Promise<ExpenseType> {
   await delay();
+  const current = listExpenseTypes().find((t) => t.id === id);
+  if (!current) throw new Error(`Expense type ${id} not found`);
+  if (patch.displayName !== undefined) {
+    const dup = listExpenseTypes().find(
+      (t) => t.id !== id && t.displayName.trim().toLowerCase() === patch.displayName!.trim().toLowerCase()
+    );
+    if (dup) throw new Error(`An expense type named "${dup.displayName}" already exists.`);
+  }
+  if (patch.isMileage === true && !current.isMileage) {
+    const prev = listExpenseTypes().find((t) => t.isMileage && t.id !== id);
+    if (prev) patchExpenseType(prev.id, { isMileage: false });
+  }
+  const oldName = current.displayName;
   const type = patchExpenseType(id, patch);
   if (!type) throw new Error(`Expense type ${id} not found`);
+  if (actorId) {
+    const summary =
+      patch.displayName && patch.displayName !== oldName
+        ? `Expense type renamed from "${oldName}" to "${type.displayName}"`
+        : `Expense type "${type.displayName}" updated`;
+    insertChangeLog({
+      id: newId("change"),
+      reportId: null,
+      changedById: actorId,
+      changedAt: nowIso(),
+      changeType: "OTHER",
+      field: "expenseType",
+      summary,
+      oldValue: oldName,
+      newValue: type.displayName,
+    });
+  }
   return type;
+}
+
+export async function deleteExpenseType(
+  id: string,
+  actorId: string
+): Promise<void> {
+  await delay();
+  const type = listExpenseTypes().find((t) => t.id === id);
+  if (!type) throw new Error(`Expense type ${id} not found`);
+  const count = listLineItems().filter((li) => li.expenseTypeId === id).length;
+  if (count > 0) {
+    throw new Error(
+      `Cannot delete: ${count} line item${count === 1 ? "" : "s"} reference this type. Deactivate it instead.`
+    );
+  }
+  removeExpenseType(id);
+  insertChangeLog({
+    id: newId("change"),
+    reportId: null,
+    changedById: actorId,
+    changedAt: nowIso(),
+    changeType: "OTHER",
+    field: "expenseType",
+    summary: `Expense type "${type.displayName}" deleted`,
+    oldValue: type.displayName,
+  });
 }
 
 export async function adminChangeReportStatus(

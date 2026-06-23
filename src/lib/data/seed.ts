@@ -207,7 +207,7 @@ export function buildExpenseTypes(): ExpenseType[] {
     displayName: string,
     glCode: string,
     glName: string
-  ): ExpenseType => ({ id, displayName, glCode, glName, isMileage: false });
+  ): ExpenseType => ({ id, displayName, glCode, glName, isMileage: false, isActive: true });
 
   return [
     t(ET.travel, "Travel", "MR5100501000", "Business Travel"),
@@ -236,9 +236,9 @@ export function buildExpenseTypes(): ExpenseType[] {
     t("etype-software", "Computer Software EXP", "MR5100501220", "Software Exp"),
     t("etype-ait", "AIT", "MR4000003050", "Revenue - AIT - Admin in Training"),
     // Free-text "Other" — submitter must describe; GL filled in by accounting if needed.
-    { id: ET.freeOther, displayName: "Other", glCode: "", glName: "Other", isMileage: false },
+    { id: ET.freeOther, displayName: "Other", glCode: "", glName: "Other", isMileage: false, isActive: true },
     // Mileage: GL code blank for now (fillable later from the Admin tab).
-    { id: ET.mileage, displayName: "Mileage", glCode: "", glName: "Mileage", isMileage: true },
+    { id: ET.mileage, displayName: "Mileage", glCode: "", glName: "Mileage", isMileage: true, isActive: true },
   ];
 }
 

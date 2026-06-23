@@ -115,6 +115,9 @@ export function getDb(): Database {
     if (r.deletedAt === undefined) r.deletedAt = null;
     if (r.deletedById === undefined) r.deletedById = null;
   }
+  for (const t of db.expenseTypes) {
+    if ((t as { isActive?: boolean }).isActive === undefined) t.isActive = true;
+  }
   // Add trash retention setting if missing from older persisted data.
   if (!db.systemSettings.some((s) => s.key === "receiptTrashRetentionDays")) {
     db.systemSettings.push({
@@ -234,6 +237,14 @@ export function patchExpenseType(
   Object.assign(type, patch);
   persist();
   return type;
+}
+
+export function removeExpenseType(id: string): boolean {
+  const idx = getDb().expenseTypes.findIndex((t) => t.id === id);
+  if (idx === -1) return false;
+  getDb().expenseTypes.splice(idx, 1);
+  persist();
+  return true;
 }
 
 export function listDelegates() {

@@ -26,8 +26,8 @@ import { formatCurrency, formatDate } from "@/lib/format";
 import {
   attachReceipt,
   deleteReport,
+  getActiveExpenseTypes,
   getDelegatedPrincipals,
-  getExpenseTypes,
   getReceipts,
   getReport,
   getUsers,
@@ -74,8 +74,8 @@ export function ReportEditor({ reportId }: { reportId: string }) {
     queryFn: () => getReport(reportId),
   });
   const types = useQuery({
-    queryKey: ["expense-types"],
-    queryFn: getExpenseTypes,
+    queryKey: ["active-expense-types"],
+    queryFn: getActiveExpenseTypes,
   });
   const receipts = useQuery({
     queryKey: editorReceiptsKey(user.id),

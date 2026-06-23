@@ -274,7 +274,7 @@ export function ReportDetailView({
                             onChange={(e) => setDraftTypeId(e.target.value)}
                             disabled={reclassifySaving}
                           >
-                            {allTypes.filter((t) => !t.isMileage).map((t) => (
+                            {allTypes.filter((t) => !t.isMileage && t.isActive).map((t) => (
                               <option key={t.id} value={t.id}>
                                 {t.displayName}
                               </option>
