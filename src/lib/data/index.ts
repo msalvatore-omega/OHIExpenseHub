@@ -52,6 +52,8 @@ import {
   removeReceiptById,
   upsertSetting,
   userHasRelations,
+  insertSignInAttempt,
+  listSignInAttempts,
 } from "@/lib/data/store";
 import {
   DEFAULT_APP_VERSION,
@@ -1632,12 +1634,142 @@ export async function createUser(input: CreateUserInput): Promise<User> {
     role: input.role,
     isActive: true,
     managerId: input.managerId || null,
-    // Approver chain is configured later via the admin user edit dialog.
-    approver1Id: null,
-    approver2Id: null,
-    approver3Id: null,
+    approver1Id: input.approver1Id ?? null,
+    approver2Id: input.approver2Id ?? null,
+    approver3Id: input.approver3Id ?? null,
     fastTrackThreshold: input.fastTrackThreshold ?? 0,
   });
+}
+
+/**
+ * Simulate the Azure AD sign-in callback (mock layer).
+ *
+ * In production this runs server-side in the NextAuth `signIn` callback.
+ * Here it runs client-side against the mock store, but the logic is identical:
+ *   1. Look up the User row by email (case-insensitive).
+ *   2. Active match → link azureAdId if null, return the user.
+ *   3. Inactive match → reject, log the attempt.
+ *   4. No match → reject, log the attempt.
+ *
+ * The caller redirects to /auth/error with the appropriate reason on rejection.
+ */
+export async function simulateAzureAdSignIn(
+  email: string
+): Promise<
+  | { status: "OK"; user: User }
+  | { status: "DENIED_INACTIVE" }
+  | { status: "DENIED_UNPROVISIONED" }
+> {
+  await delay();
+  const normalized = email.trim().toLowerCase();
+  const match = listUsers().find((u) => u.email.toLowerCase() === normalized);
+
+  if (!match) {
+    insertSignInAttempt({
+      id: newId("sia"),
+      attemptedEmail: email.trim(),
+      outcome: "DENIED_UNPROVISIONED",
+      attemptedAt: nowIso(),
+    });
+    return { status: "DENIED_UNPROVISIONED" };
+  }
+
+  if (!match.isActive) {
+    insertSignInAttempt({
+      id: newId("sia"),
+      attemptedEmail: email.trim(),
+      outcome: "DENIED_INACTIVE",
+      attemptedAt: nowIso(),
+    });
+    return { status: "DENIED_INACTIVE" };
+  }
+
+  // Link azureAdId on first sign-in (mimics the production callback behavior).
+  if (!match.azureAdId) {
+    patchUser(match.id, { azureAdId: `aad-linked-${match.id}` });
+    return { status: "OK", user: { ...match, azureAdId: `aad-linked-${match.id}` } };
+  }
+
+  return { status: "OK", user: match };
+}
+
+/** Returns denied sign-in attempts, newest first. */
+export async function getSignInAttempts() {
+  await delay();
+  return [...listSignInAttempts()].reverse();
+}
+
+export interface BulkImportRow {
+  email: string;
+  name: string;
+  department: string;
+  role: string;
+  managerEmail: string;
+  approver1Email: string;
+  approver2Email: string;
+  approver3Email: string;
+  fastTrackThreshold: string;
+}
+
+export interface BulkImportResult {
+  created: number;
+  errors: { row: number; email: string; message: string }[];
+}
+
+/** Create multiple users from a validated CSV import. Skips rows that error. */
+export async function bulkImportUsers(
+  rows: BulkImportRow[]
+): Promise<BulkImportResult> {
+  await delay();
+  const result: BulkImportResult = { created: 0, errors: [] };
+  const allUsers = listUsers();
+  const byEmail = new Map(allUsers.map((u) => [u.email.toLowerCase(), u]));
+
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+    const email = r.email.trim();
+    if (!email) {
+      result.errors.push({ row: i + 1, email: "", message: "Email is required." });
+      continue;
+    }
+    if (byEmail.has(email.toLowerCase())) {
+      result.errors.push({ row: i + 1, email, message: "Email already exists." });
+      continue;
+    }
+    const validRoles = ["EMPLOYEE", "ADMIN", "ACCOUNTING"];
+    const role = r.role.trim().toUpperCase();
+    if (!validRoles.includes(role)) {
+      result.errors.push({ row: i + 1, email, message: `Invalid role "${r.role}".` });
+      continue;
+    }
+    const resolveEmail = (e: string) =>
+      e.trim() ? byEmail.get(e.trim().toLowerCase())?.id ?? null : null;
+    const managerId = resolveEmail(r.managerEmail);
+    if (r.managerEmail.trim() && !managerId) {
+      result.errors.push({ row: i + 1, email, message: `Manager "${r.managerEmail}" not found.` });
+      continue;
+    }
+    const approver1Id = resolveEmail(r.approver1Email);
+    const approver2Id = resolveEmail(r.approver2Email);
+    const approver3Id = resolveEmail(r.approver3Email);
+    const user = insertUser({
+      id: newId("user"),
+      azureAdId: null,
+      email,
+      name: r.name.trim() || email,
+      department: r.department.trim(),
+      role: role as import("@/lib/types").UserRole,
+      isActive: true,
+      managerId,
+      approver1Id,
+      approver2Id,
+      approver3Id,
+      fastTrackThreshold: Number(r.fastTrackThreshold) || 0,
+    });
+    byEmail.set(email.toLowerCase(), user);
+    result.created += 1;
+  }
+  return result;
 }
 
 // ---- Approval groups (admin) ----

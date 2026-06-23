@@ -20,6 +20,7 @@ import type {
   MockEmail,
   Receipt,
   ReportChangeLog,
+  SignInAttempt,
   SystemSetting,
   User,
   UserActivity,
@@ -40,6 +41,7 @@ export interface Database {
   approvalGroups: ApprovalGroup[];
   approvalGroupMembers: ApprovalGroupMember[];
   userActivities: UserActivity[];
+  signInAttempts: SignInAttempt[];
 }
 
 // --- Stable IDs (referenced across collections) ---
@@ -282,6 +284,7 @@ export function createSeedData(): Database {
     approvalGroups: buildApprovalGroups(),
     approvalGroupMembers: buildApprovalGroupMembers(),
     userActivities: [],
+    signInAttempts: [],
   };
 }
 

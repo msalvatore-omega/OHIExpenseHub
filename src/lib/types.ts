@@ -61,7 +61,22 @@ export interface CreateUserInput {
   department: string;
   role: UserRole;
   managerId: string | null;
+  approver1Id?: string | null;
+  approver2Id?: string | null;
+  approver3Id?: string | null;
   fastTrackThreshold?: number;
+}
+
+/**
+ * Audit record for a rejected sign-in attempt.
+ * Written when Azure AD authenticates someone but they are not provisioned
+ * (or are deactivated) in the system.
+ */
+export interface SignInAttempt {
+  id: string;
+  attemptedEmail: string;
+  outcome: "DENIED_UNPROVISIONED" | "DENIED_INACTIVE";
+  attemptedAt: string;
 }
 
 /** The two mandatory approval groups. */

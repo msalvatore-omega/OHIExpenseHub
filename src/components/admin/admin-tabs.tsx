@@ -5,7 +5,7 @@
 
 import * as React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Trash2, UserCheck, UserPlus } from "lucide-react";
+import { AlertTriangle, Download, Plus, Trash2, Upload, UserCheck, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 
 import { cn } from "@/lib/utils";
@@ -13,6 +13,7 @@ import { SETTING_KEYS } from "@/lib/constants";
 import { formatCurrency } from "@/lib/format";
 import {
   addApprovalGroupMember,
+  bulkImportUsers,
   createDelegate,
   createExpenseType,
   createUser,
@@ -21,6 +22,7 @@ import {
   getApprovalGroups,
   getDelegates,
   getExpenseTypes,
+  getSignInAttempts,
   getUserDeletability,
   getUsers,
   removeApprovalGroupMemberById,
@@ -28,6 +30,7 @@ import {
   updateExpenseType,
   updateSystemSetting,
   updateUser,
+  type BulkImportRow,
 } from "@/lib/data";
 import {
   systemSettingsKey,
@@ -110,6 +113,7 @@ export function UsersTab() {
   const users = useQuery({ queryKey: ["users"], queryFn: getUsers });
   const [editing, setEditing] = React.useState<User | null>(null);
   const [adding, setAdding] = React.useState(false);
+  const [importing, setImporting] = React.useState(false);
   const [deleting, setDeleting] = React.useState<User | null>(null);
   const [reactivating, setReactivating] = React.useState<User | null>(null);
 
@@ -129,7 +133,11 @@ export function UsersTab() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-2">
+        <Button variant="outline" onClick={() => setImporting(true)}>
+          <Upload className="size-4" />
+          Import CSV
+        </Button>
         <Button onClick={() => setAdding(true)}>
           <UserPlus className="size-4" />
           Add User
@@ -232,6 +240,14 @@ export function UsersTab() {
           setAdding(false);
         }}
       />
+      <BulkImportDialog
+        open={importing}
+        onClose={() => setImporting(false)}
+        onSaved={() => {
+          invalidate();
+          setImporting(false);
+        }}
+      />
       <DeleteUserDialog
         user={deleting}
         onClose={() => setDeleting(null)}
@@ -248,6 +264,8 @@ export function UsersTab() {
           setReactivating(null);
         }}
       />
+
+      <SignInAttemptsSection />
     </div>
   );
 }
@@ -316,6 +334,9 @@ function AddUserDialog({
   const [department, setDepartment] = React.useState("");
   const [role, setRole] = React.useState<UserRole>("EMPLOYEE");
   const [managerId, setManagerId] = React.useState("");
+  const [approver1Id, setApprover1Id] = React.useState("");
+  const [approver2Id, setApprover2Id] = React.useState("");
+  const [approver3Id, setApprover3Id] = React.useState("");
   const [fastTrack, setFastTrack] = React.useState("0");
 
   React.useEffect(() => {
@@ -327,6 +348,9 @@ function AddUserDialog({
       setDepartment("");
       setRole("EMPLOYEE");
       setManagerId("");
+      setApprover1Id("");
+      setApprover2Id("");
+      setApprover3Id("");
       setFastTrack("0");
     }
   }, [open]);
@@ -339,6 +363,9 @@ function AddUserDialog({
         department,
         role,
         managerId: managerId || null,
+        approver1Id: approver1Id || null,
+        approver2Id: approver2Id || null,
+        approver3Id: approver3Id || null,
         fastTrackThreshold: Number(fastTrack) || 0,
       }),
     onSuccess: () => {
@@ -361,7 +388,7 @@ function AddUserDialog({
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="name@ohi.example.com"
+              placeholder="name@omegahealthcare.com"
             />
           </label>
           <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
@@ -404,10 +431,19 @@ function AddUserDialog({
               ))}
             </select>
           </label>
+          <div className="flex flex-col gap-2 rounded-lg border border-border p-3">
+            <p className="text-xs font-medium text-muted-foreground">Approval chain</p>
+            <ApproverPicker label="Approver #1" value={approver1Id} options={users} onChange={setApprover1Id} />
+            <ApproverPicker label="Approver #2 (optional)" value={approver2Id} options={users} onChange={setApprover2Id} />
+            <ApproverPicker label="Approver #3 (optional)" value={approver3Id} options={users} onChange={setApprover3Id} />
+            <p className="text-xs text-muted-foreground">
+              Approvals route through these in order, skipping any left empty.
+            </p>
+          </div>
           <FastTrackField value={fastTrack} onChange={setFastTrack} />
           <p className="text-xs text-muted-foreground">
             The account links to Azure AD on the user&apos;s first sign-in
-            (matched by email).
+            (matched by email). <strong>Only provisioned users may sign in.</strong>
           </p>
         </div>
         <DialogFooter>
@@ -423,6 +459,280 @@ function AddUserDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// ---- CSV helpers ----
+
+const CSV_COLUMNS = [
+  "email",
+  "name",
+  "department",
+  "role",
+  "managerEmail",
+  "approver1Email",
+  "approver2Email",
+  "approver3Email",
+  "fastTrackThreshold",
+] as const;
+
+const CSV_TEMPLATE = CSV_COLUMNS.join(",") + "\n";
+
+function parseCsv(text: string): BulkImportRow[] {
+  const lines = text.split(/\r?\n/).filter((l) => l.trim());
+  if (!lines.length) return [];
+  // Skip header row if present.
+  const first = lines[0].toLowerCase();
+  const start = first.includes("email") ? 1 : 0;
+  return lines.slice(start).map((line) => {
+    const cols = line.split(",").map((c) => c.trim().replace(/^"|"$/g, ""));
+    return {
+      email: cols[0] ?? "",
+      name: cols[1] ?? "",
+      department: cols[2] ?? "",
+      role: cols[3] ?? "",
+      managerEmail: cols[4] ?? "",
+      approver1Email: cols[5] ?? "",
+      approver2Email: cols[6] ?? "",
+      approver3Email: cols[7] ?? "",
+      fastTrackThreshold: cols[8] ?? "",
+    };
+  });
+}
+
+function BulkImportDialog({
+  open,
+  onClose,
+  onSaved,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const fileRef = React.useRef<HTMLInputElement>(null);
+  const [rows, setRows] = React.useState<BulkImportRow[]>([]);
+  const [fileName, setFileName] = React.useState("");
+  const [parseError, setParseError] = React.useState("");
+
+  React.useEffect(() => {
+    if (!open) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setRows([]);
+      setFileName("");
+      setParseError("");
+    }
+  }, [open]);
+
+  function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setFileName(file.name);
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const text = ev.target?.result as string;
+        const parsed = parseCsv(text);
+        if (!parsed.length) { setParseError("No data rows found."); return; }
+        setParseError("");
+        setRows(parsed);
+      } catch {
+        setParseError("Could not parse file.");
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  }
+
+  const mutation = useMutation({
+    mutationFn: () => bulkImportUsers(rows),
+    onSuccess: (result) => {
+      if (result.errors.length) {
+        toast.warning(
+          `Imported ${result.created} user(s). ${result.errors.length} row(s) had errors.`
+        );
+      } else {
+        toast.success(`Imported ${result.created} user(s).`);
+      }
+      onSaved();
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
+  });
+
+  const result = mutation.data;
+
+  function downloadTemplate() {
+    const blob = new Blob([CSV_TEMPLATE], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "ohi-user-import-template.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Bulk import users</DialogTitle>
+        </DialogHeader>
+        <div className="flex flex-col gap-4">
+          <p className="text-sm text-muted-foreground">
+            Upload a CSV with columns:{" "}
+            <code className="text-xs">{CSV_COLUMNS.join(", ")}</code>. Only
+            pre-provisioned users may sign in — this is the recommended path for
+            go-live and rollout.
+          </p>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={downloadTemplate}>
+              <Download className="size-4" />
+              Download template
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => fileRef.current?.click()}
+            >
+              <Upload className="size-4" />
+              {fileName ? fileName : "Choose CSV file"}
+            </Button>
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".csv,text/csv"
+              className="hidden"
+              onChange={handleFile}
+            />
+          </div>
+          {parseError && (
+            <p className="text-xs text-destructive">{parseError}</p>
+          )}
+          {rows.length > 0 && !result && (
+            <div className="overflow-hidden rounded-lg border border-border">
+              <div className="overflow-x-auto max-h-60">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-border bg-muted/60">
+                      <th className="px-2 py-1.5 text-left font-semibold">#</th>
+                      <th className="px-2 py-1.5 text-left font-semibold">Email</th>
+                      <th className="px-2 py-1.5 text-left font-semibold">Name</th>
+                      <th className="px-2 py-1.5 text-left font-semibold">Dept</th>
+                      <th className="px-2 py-1.5 text-left font-semibold">Role</th>
+                      <th className="px-2 py-1.5 text-left font-semibold">Manager</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((r, i) => (
+                      <tr key={i} className="border-b border-border last:border-0">
+                        <td className="px-2 py-1.5 text-muted-foreground">{i + 1}</td>
+                        <td className="px-2 py-1.5">{r.email}</td>
+                        <td className="px-2 py-1.5">{r.name}</td>
+                        <td className="px-2 py-1.5">{r.department}</td>
+                        <td className="px-2 py-1.5">{r.role}</td>
+                        <td className="px-2 py-1.5">{r.managerEmail || "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="px-3 py-2 text-xs text-muted-foreground">
+                {rows.length} row(s) ready to import.
+              </p>
+            </div>
+          )}
+          {result && (
+            <div className="flex flex-col gap-2">
+              <p className="text-sm font-medium">
+                Imported {result.created} user(s)
+                {result.errors.length > 0 ? ` · ${result.errors.length} error(s)` : "."}
+              </p>
+              {result.errors.map((err, i) => (
+                <div key={i} className="flex items-start gap-2 rounded-lg border border-destructive/40 p-2 text-xs text-destructive">
+                  <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+                  <span>Row {err.row} ({err.email || "—"}): {err.message}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            {result ? "Close" : "Cancel"}
+          </Button>
+          {!result && (
+            <Button
+              onClick={() => mutation.mutate()}
+              disabled={mutation.isPending || rows.length === 0}
+            >
+              {mutation.isPending
+                ? "Importing…"
+                : `Import ${rows.length} user${rows.length === 1 ? "" : "s"}`}
+            </Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ---- Sign-in attempts ----
+
+function SignInAttemptsSection() {
+  const attempts = useQuery({
+    queryKey: ["sign-in-attempts"],
+    queryFn: getSignInAttempts,
+  });
+  const data = attempts.data ?? [];
+
+  if (!data.length) return null;
+
+  return (
+    <div className="flex flex-col gap-2 pt-4">
+      <div className="flex items-center gap-2">
+        <AlertTriangle className="size-4 text-warning" />
+        <h3 className="text-sm font-semibold">Denied sign-in attempts</h3>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        These users authenticated with Azure AD but were rejected because they
+        are not provisioned or their account is deactivated. Provision legitimate
+        users above.
+      </p>
+      <div className="overflow-hidden rounded-xl border border-border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Email</TableHead>
+              <TableHead>Outcome</TableHead>
+              <TableHead>Time</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {data.map((a) => (
+              <TableRow key={a.id}>
+                <TableCell className="font-medium">{a.attemptedEmail}</TableCell>
+                <TableCell>
+                  <span
+                    className={cn(
+                      "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium",
+                      a.outcome === "DENIED_INACTIVE"
+                        ? "bg-muted text-muted-foreground"
+                        : "bg-destructive/10 text-destructive"
+                    )}
+                  >
+                    {a.outcome === "DENIED_INACTIVE"
+                      ? "Account deactivated"
+                      : "Not provisioned"}
+                  </span>
+                </TableCell>
+                <TableCell className="text-sm text-muted-foreground">
+                  {new Date(a.attemptedAt).toLocaleString("en-US")}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    </div>
   );
 }
 

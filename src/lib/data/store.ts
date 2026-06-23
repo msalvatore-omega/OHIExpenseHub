@@ -23,6 +23,7 @@ import type {
   MockEmail,
   Receipt,
   ReportChangeLog,
+  SignInAttempt,
   SystemSetting,
   User,
   UserActivity,
@@ -95,6 +96,8 @@ export function getDb(): Database {
   }
   // Add userActivities collection if missing from older persisted data.
   if (!db.userActivities) db.userActivities = [];
+  // Add signInAttempts collection if missing from older persisted data.
+  if (!db.signInAttempts) db.signInAttempts = [];
   if (!db.approvalGroups) db.approvalGroups = buildApprovalGroups();
   if (!db.approvalGroupMembers)
     db.approvalGroupMembers = buildApprovalGroupMembers();
@@ -216,6 +219,16 @@ export function userHasRelations(id: string): boolean {
     data.delegates.some((d) => d.principalId === id || d.delegateId === id) ||
     data.changeLogs.some((c) => c.changedById === id)
   );
+}
+
+export function listSignInAttempts(): SignInAttempt[] {
+  return getDb().signInAttempts;
+}
+
+export function insertSignInAttempt(attempt: SignInAttempt): SignInAttempt {
+  getDb().signInAttempts.push(attempt);
+  persist();
+  return attempt;
 }
 
 export function listExpenseTypes() {
