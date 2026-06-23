@@ -19,8 +19,12 @@ export default function NewReportPage() {
     if (started.current) return;
     started.current = true;
     const today = new Date().toISOString().slice(0, 10);
+    const monthYear = new Date().toLocaleDateString("en-US", {
+      month: "long",
+      year: "numeric",
+    });
     createDraft({
-      reportName: "Untitled report",
+      reportName: `Expense Report — ${monthYear}`,
       submitterId: user.id,
       paidToId: user.id,
       periodFrom: today,

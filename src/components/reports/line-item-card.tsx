@@ -13,6 +13,7 @@ import {
   countryNameToCode,
 } from "@/lib/location-data";
 import type { ExpenseType, Receipt } from "@/lib/types";
+import { useSession } from "@/lib/auth/mock-session";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { CountryCombobox, SubdivisionCombobox } from "@/components/ui/location-combobox";
@@ -72,6 +73,7 @@ export function LineItemCard({
   onRemove: () => void;
   onAttachReceipt: (receiptId: string) => void;
 }) {
+  const { user } = useSession();
   const { register, setValue, control, formState } =
     useFormContext<ReportFormValues>();
   const errors = formState.errors.lineItems?.[index];
@@ -340,12 +342,14 @@ export function LineItemCard({
         )}
 
         <Field label="Receipt" className="col-span-2 sm:col-span-3">
-          {attachedReceipt ? (
+          {receiptId ? (
             <div className="flex items-center gap-3">
-              <ReceiptThumb receipt={attachedReceipt} className="size-12" />
+              {attachedReceipt && (
+                <ReceiptThumb receipt={attachedReceipt} className="size-12" />
+              )}
               <div className="text-xs">
                 <p className="font-medium">
-                  {attachedReceipt.merchantName ?? "Receipt attached"}
+                  {attachedReceipt?.merchantName ?? "Receipt attached"}
                 </p>
                 <button
                   type="button"
@@ -363,6 +367,7 @@ export function LineItemCard({
           ) : (
             <AttachReceiptDialog
               receipts={unattachedReceipts}
+              userId={user.id}
               onSelect={(r) => {
                 setValue(`lineItems.${index}.receiptId`, r.id, {
                   shouldDirty: true,

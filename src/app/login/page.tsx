@@ -15,18 +15,16 @@ import { clearAnnouncementDismissal } from "@/components/announcement-banner";
 import { BrandLogo } from "@/components/brand-logo";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 
-const ROLE_ORDER: UserRole[] = ["ADMIN", "APPROVER", "ACCOUNTING", "SUBMITTER"];
+const ROLE_ORDER: UserRole[] = ["ADMIN", "ACCOUNTING", "EMPLOYEE"];
 const ROLE_LABEL: Record<UserRole, string> = {
   ADMIN: "Admin",
-  APPROVER: "Approver",
   ACCOUNTING: "Accounting",
-  SUBMITTER: "Submitter",
+  EMPLOYEE: "Employee",
 };
 const ROLE_BADGE: Record<UserRole, string> = {
   ADMIN: "bg-violet-100 text-violet-800 dark:bg-violet-950 dark:text-violet-300",
-  APPROVER: "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300",
   ACCOUNTING: "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300",
-  SUBMITTER: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
+  EMPLOYEE: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
 };
 
 function initials(name: string): string {

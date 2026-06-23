@@ -62,7 +62,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-const ROLES: UserRole[] = ["SUBMITTER", "APPROVER", "ADMIN", "ACCOUNTING"];
+const ROLES: UserRole[] = ["EMPLOYEE", "ADMIN", "ACCOUNTING"];
 const SELECT_CLASS =
   "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
 
@@ -314,7 +314,7 @@ function AddUserDialog({
   const [email, setEmail] = React.useState("");
   const [name, setName] = React.useState("");
   const [department, setDepartment] = React.useState("");
-  const [role, setRole] = React.useState<UserRole>("SUBMITTER");
+  const [role, setRole] = React.useState<UserRole>("EMPLOYEE");
   const [managerId, setManagerId] = React.useState("");
   const [fastTrack, setFastTrack] = React.useState("0");
 
@@ -325,7 +325,7 @@ function AddUserDialog({
       setEmail("");
       setName("");
       setDepartment("");
-      setRole("SUBMITTER");
+      setRole("EMPLOYEE");
       setManagerId("");
       setFastTrack("0");
     }
@@ -637,7 +637,7 @@ function EditUserDialog({
 }) {
   const [name, setName] = React.useState<string>("");
   const [department, setDepartment] = React.useState<string>("");
-  const [role, setRole] = React.useState<UserRole>("SUBMITTER");
+  const [role, setRole] = React.useState<UserRole>("EMPLOYEE");
   const [managerId, setManagerId] = React.useState<string>("");
   const [approver1Id, setApprover1Id] = React.useState<string>("");
   const [approver2Id, setApprover2Id] = React.useState<string>("");

@@ -282,3 +282,8 @@ html {
     margin: 1.5cm;
   }
 }
+
+/* PDF viewer fullscreen: hide the sidebar so the dialog occupies the entire viewport */
+body.pdf-viewing aside {
+  display: none !important;
+}

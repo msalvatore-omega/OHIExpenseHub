@@ -18,7 +18,14 @@ import {
 
 import { cn } from "@/lib/utils";
 import { APP_NAME } from "@/lib/constants";
+import type { UserRole } from "@/lib/types";
 import { useSession } from "@/lib/auth/mock-session";
+
+const ROLE_LABEL: Record<UserRole, string> = {
+  EMPLOYEE: "Employee",
+  ADMIN: "Admin",
+  ACCOUNTING: "Accounting",
+};
 import { useSystemSettings } from "@/lib/use-system-settings";
 import { visibleNavItems, type NavItem } from "@/lib/nav";
 import { AnnouncementBanner } from "@/components/announcement-banner";
@@ -202,7 +209,7 @@ function DesktopSidebar({ items }: { items: NavItem[] }) {
             "flex items-center gap-2 rounded-md px-2 py-1.5",
             collapsed && "justify-center px-0"
           )}
-          title={collapsed ? `${user.name} (${role})` : undefined}
+          title={collapsed ? `${user.name} (${ROLE_LABEL[role]})` : undefined}
         >
           <Avatar className="size-8">
             <AvatarFallback className="text-xs">
@@ -213,7 +220,7 @@ function DesktopSidebar({ items }: { items: NavItem[] }) {
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium">{user.name}</p>
               <Badge variant="secondary" className="mt-0.5 text-[10px]">
-                {role}
+                {ROLE_LABEL[role]}
               </Badge>
             </div>
           )}
@@ -396,7 +403,7 @@ function MobileTopBar() {
           <DropdownMenuLabel>
             <div className="flex flex-col">
               <span className="text-sm font-medium">{user.name}</span>
-              <span className="text-xs text-muted-foreground">{role}</span>
+              <span className="text-xs text-muted-foreground">{ROLE_LABEL[role]}</span>
             </div>
           </DropdownMenuLabel>
           <DropdownMenuSeparator />

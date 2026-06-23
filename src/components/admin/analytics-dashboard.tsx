@@ -46,7 +46,7 @@ const PALETTE = [
   "#13315C", "#5B8FC9", "#7C9A92", "#9B6A6C", "#3E6B89",
 ];
 
-const ROLES: UserRole[] = ["SUBMITTER", "APPROVER", "ACCOUNTING", "ADMIN"];
+const ROLES: UserRole[] = ["EMPLOYEE", "ACCOUNTING", "ADMIN"];
 
 type DatePreset = "today" | "7d" | "30d" | "90d" | "year" | "custom";
 

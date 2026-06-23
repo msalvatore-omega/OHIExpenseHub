@@ -104,6 +104,10 @@ export function getDb(): Database {
     if (u.approver2Id === undefined) u.approver2Id = null;
     if (u.approver3Id === undefined) u.approver3Id = null;
     if (u.fastTrackThreshold === undefined) u.fastTrackThreshold = 0;
+    // Migrate SUBMITTER / APPROVER → EMPLOYEE.
+    if ((u.role as string) === "SUBMITTER" || (u.role as string) === "APPROVER") {
+      u.role = "EMPLOYEE";
+    }
   }
   for (const r of db.receipts) {
     if (r.uploadedById === undefined) r.uploadedById = r.userId;

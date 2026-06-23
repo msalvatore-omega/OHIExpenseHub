@@ -1,6 +1,6 @@
 "use client";
 
-// Approvals list — reports awaiting the current user (APPROVER + ADMIN).
+// Approvals list — reports where the current user is the current step's approver.
 
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
@@ -8,7 +8,6 @@ import { useQuery } from "@tanstack/react-query";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { getApprovalQueue, getUsers } from "@/lib/data";
 import { useSession } from "@/lib/auth/mock-session";
-import { RoleGuard } from "@/components/role-guard";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -21,11 +20,7 @@ import {
 } from "@/components/ui/table";
 
 export default function ApprovalsPage() {
-  return (
-    <RoleGuard allow={["APPROVER", "ADMIN", "ACCOUNTING"]}>
-      <ApprovalsList />
-    </RoleGuard>
-  );
+  return <ApprovalsList />;
 }
 
 function ApprovalsList() {
@@ -78,7 +73,7 @@ function ApprovalsList() {
                   colSpan={6}
                   className="h-24 text-center text-sm text-muted-foreground"
                 >
-                  Nothing awaiting your approval.
+                  No reports awaiting your approval right now.
                 </TableCell>
               </TableRow>
             ) : (

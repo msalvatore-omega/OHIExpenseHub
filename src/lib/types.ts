@@ -2,7 +2,7 @@
 // These mirror the eventual persisted schema so the mock layer can be swapped
 // for real services (Prisma models / API DTOs) without changing the UI.
 
-export type UserRole = "SUBMITTER" | "APPROVER" | "ADMIN" | "ACCOUNTING";
+export type UserRole = "EMPLOYEE" | "ADMIN" | "ACCOUNTING";
 
 export type ReportStatus =
   | "DRAFT"

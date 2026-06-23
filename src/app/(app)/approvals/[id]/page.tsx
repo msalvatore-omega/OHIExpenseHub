@@ -1,5 +1,4 @@
 import { ApprovalDetail } from "@/components/approvals/approval-detail";
-import { RoleGuard } from "@/components/role-guard";
 
 // Next 16: dynamic route params are async.
 export default async function ApprovalDetailPage({
@@ -8,9 +7,5 @@ export default async function ApprovalDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  return (
-    <RoleGuard allow={["APPROVER", "ADMIN", "ACCOUNTING"]}>
-      <ApprovalDetail reportId={id} />
-    </RoleGuard>
-  );
+  return <ApprovalDetail reportId={id} />;
 }
